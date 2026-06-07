@@ -414,6 +414,54 @@ def _link_patient_hiv_viral_load(tx: ManagedTransaction, patient_id: str, viral_
 
 
 # ---------------------------------------------------------------------------
+# OpdVisit
+# ---------------------------------------------------------------------------
+
+def _create_opd_visit(
+    tx: ManagedTransaction,
+    visit_id: str,
+    visit_date: str | None,
+    clinic: str | None,
+    chief_complaint: str | None,
+    notes: str | None,
+) -> str:
+    tx.run(
+        CYPHERS["CREATE_OpdVisit"],
+        visit_id=visit_id,
+        visit_date=visit_date,
+        clinic=clinic,
+        chief_complaint=chief_complaint,
+        notes=notes,
+    )
+    return visit_id
+
+
+def _get_opd_visit(tx: ManagedTransaction, visit_id: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_OpdVisit"], visit_id=visit_id).single()
+    return dict(record["v"]) if record else None
+
+
+def _delete_opd_visit(tx: ManagedTransaction, visit_id: str) -> None:
+    tx.run(CYPHERS["DELETE_OpdVisit"], visit_id=visit_id)
+
+
+def _link_patient_opd_visit(tx: ManagedTransaction, patient_id: str, visit_id: str) -> None:
+    tx.run(
+        CYPHERS["ASSOCIATE_Patient_HAS_OpdVisit"],
+        patient_id=patient_id,
+        visit_id=visit_id,
+    )
+
+
+def _link_specimen_opd_visit(tx: ManagedTransaction, specimen_id: str, visit_id: str) -> None:
+    tx.run(
+        CYPHERS["ASSOCIATE_Specimen_COLLECTED_AT_VISIT"],
+        specimen_id=specimen_id,
+        visit_id=visit_id,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Variant
 # ---------------------------------------------------------------------------
 

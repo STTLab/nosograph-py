@@ -1,7 +1,7 @@
 from datetime import date
 import pytest
 from pydantic import ValidationError
-from nosograph.models.patient import Patient, Admission, Ward, Department
+from nosograph.models.patient import Patient, Admission, Ward, Department, OpdVisit
 from nosograph.models.specimen import Specimen, Sample
 from nosograph.models.genomics import Organism, ReferenceGenome, Assembly, Contig, Variant
 from nosograph.models.lab import LabResult, HIVViralLoad
@@ -79,6 +79,37 @@ class TestDepartment:
     def test_valid(self):
         d = Department(department_id="D1", name="Surgery")
         assert d.description is None
+
+
+# ---------------------------------------------------------------------------
+# OpdVisit
+# ---------------------------------------------------------------------------
+
+class TestOpdVisit:
+    def test_minimal(self):
+        v = OpdVisit(visit_id="OPD001")
+        assert v.visit_id == "OPD001"
+        assert v.visit_date is None
+        assert v.clinic is None
+        assert v.chief_complaint is None
+        assert v.notes is None
+
+    def test_full(self):
+        v = OpdVisit(
+            visit_id="OPD002",
+            visit_date=date(2025, 6, 1),
+            clinic="HIV Clinic",
+            chief_complaint="Routine follow-up",
+            notes="Viral load stable.",
+        )
+        assert v.visit_date == date(2025, 6, 1)
+        assert v.clinic == "HIV Clinic"
+        assert v.chief_complaint == "Routine follow-up"
+        assert v.notes == "Viral load stable."
+
+    def test_visit_id_required(self):
+        with pytest.raises(ValidationError):
+            OpdVisit()
 
 
 # ---------------------------------------------------------------------------

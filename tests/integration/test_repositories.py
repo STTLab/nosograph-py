@@ -1,7 +1,7 @@
 from datetime import date
 import pytest
 from nosograph import (
-    Patient, Admission, Ward, Department,
+    Patient, Admission, Ward, Department, OpdVisit,
     Specimen, Sample,
     Organism, ReferenceGenome, Assembly, Contig,
     LabResult, HIVViralLoad,
@@ -313,3 +313,84 @@ class TestHIVViralLoadRepository:
                 "MATCH (p:Patient {patient_id:'P_VL01'})-[:HAS_HIV_VIRAL_LOAD_RESULT]->(vl:HIVViralLoad {viral_load_id:'VL_LINK01'}) RETURN vl"
             ).single()
         assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# OpdVisitRepository
+# ---------------------------------------------------------------------------
+
+class TestOpdVisitRepository:
+    def test_create_get_delete(self, graph):
+        v = OpdVisit(
+            visit_id="OPD001",
+            visit_date=date(2025, 6, 1),
+            clinic="HIV Clinic",
+            chief_complaint="Routine follow-up",
+            notes="Stable. Continue ART.",
+        )
+        graph.opd_visits.create(v)
+
+        fetched = graph.opd_visits.get("OPD001")
+        assert fetched is not None
+        assert fetched.visit_id == "OPD001"
+        assert fetched.visit_date == date(2025, 6, 1)
+        assert fetched.clinic == "HIV Clinic"
+        assert fetched.chief_complaint == "Routine follow-up"
+
+        graph.opd_visits.delete("OPD001")
+        assert graph.opd_visits.get("OPD001") is None
+
+    def test_create_minimal(self, graph):
+        graph.opd_visits.create(OpdVisit(visit_id="OPD002"))
+        fetched = graph.opd_visits.get("OPD002")
+        assert fetched is not None
+        assert fetched.visit_date is None
+        assert fetched.clinic is None
+
+    def test_get_nonexistent_returns_none(self, graph):
+        assert graph.opd_visits.get("DOES_NOT_EXIST") is None
+
+    def test_link_patient(self, graph):
+        graph.patients.create(Patient(patient_id="P_OPD01", firstname="A", lastname="B", age=30))
+        graph.opd_visits.create(OpdVisit(visit_id="OPD_LINK01", clinic="ANC"))
+        graph.opd_visits.link_patient("OPD_LINK01", "P_OPD01")
+
+        with graph.driver.session() as s:
+            result = s.run(
+                "MATCH (p:Patient {patient_id:'P_OPD01'})-[:HAS_OPD_VISIT]->(v:OpdVisit {visit_id:'OPD_LINK01'}) RETURN v"
+            ).single()
+        assert result is not None
+
+    def test_link_specimen_collected_at_visit(self, graph):
+        graph.opd_visits.create(OpdVisit(visit_id="OPD_SP01", clinic="HIV Clinic"))
+        graph.specimens.create(Specimen(specimen_id="SP_OPD01", specimen_type="Blood"))
+        graph.specimens.link_visit("SP_OPD01", "OPD_SP01")
+
+        with graph.driver.session() as s:
+            result = s.run(
+                "MATCH (s:Specimen {specimen_id:'SP_OPD01'})-[:COLLECTED_AT_VISIT]->(v:OpdVisit {visit_id:'OPD_SP01'}) RETURN v"
+            ).single()
+        assert result is not None
+
+    def test_full_opd_workflow(self, graph):
+        """Patient → OpdVisit → Specimen → LabResult chain."""
+        graph.patients.create(Patient(patient_id="P_WF01", firstname="C", lastname="D", age=45))
+        graph.opd_visits.create(OpdVisit(visit_id="OPD_WF01", visit_date=date(2025, 6, 7), clinic="HIV Clinic"))
+        graph.opd_visits.link_patient("OPD_WF01", "P_WF01")
+
+        graph.specimens.create(Specimen(specimen_id="SP_WF01", specimen_type="Blood"))
+        graph.specimens.link_patient("SP_WF01", "P_WF01")
+        graph.specimens.link_visit("SP_WF01", "OPD_WF01")
+
+        graph.lab_results.create(LabResult(lab_id="LR_WF01", result_type="CBC", value="13.0", unit="g/dL"))
+        graph.lab_results.link_specimen("LR_WF01", "SP_WF01")
+
+        with graph.driver.session() as s:
+            result = s.run("""
+                MATCH (p:Patient {patient_id:'P_WF01'})-[:HAS_OPD_VISIT]->(v:OpdVisit {visit_id:'OPD_WF01'})
+                      <-[:COLLECTED_AT_VISIT]-(sp:Specimen {specimen_id:'SP_WF01'})
+                      -[:TESTED_FOR]->(lr:LabResult {lab_id:'LR_WF01'})
+                RETURN lr.value AS val
+            """).single()
+        assert result is not None
+        assert result["val"] == "13.0"
