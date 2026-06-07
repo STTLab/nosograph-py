@@ -4,6 +4,7 @@ from nosograph import (
     Patient, Admission, Ward, Department,
     Specimen, Sample,
     Organism, ReferenceGenome, Assembly, Contig,
+    LabResult, HIVViralLoad,
 )
 
 
@@ -231,3 +232,84 @@ class TestDepartmentRepository:
 
     def test_get_nonexistent_returns_none(self, graph):
         assert graph.departments.get("NOPE") is None
+
+
+# ---------------------------------------------------------------------------
+# LabResultRepository
+# ---------------------------------------------------------------------------
+
+class TestLabResultRepository:
+    def test_create_get_delete(self, graph):
+        lr = LabResult(
+            lab_id="LR001",
+            result_type="CBC",
+            test_date=date(2025, 6, 1),
+            value="12.5",
+            unit="g/dL",
+        )
+        graph.lab_results.create(lr)
+
+        fetched = graph.lab_results.get("LR001")
+        assert fetched is not None
+        assert fetched.lab_id == "LR001"
+        assert fetched.result_type == "CBC"
+        assert fetched.test_date == date(2025, 6, 1)
+
+        graph.lab_results.delete("LR001")
+        assert graph.lab_results.get("LR001") is None
+
+    def test_get_nonexistent_returns_none(self, graph):
+        assert graph.lab_results.get("DOES_NOT_EXIST") is None
+
+    def test_link_specimen(self, graph):
+        graph.specimens.create(Specimen(specimen_id="SP_LR01"))
+        graph.lab_results.create(LabResult(lab_id="LR_LINK01"))
+        graph.lab_results.link_specimen("LR_LINK01", "SP_LR01")
+
+        with graph.driver.session() as s:
+            result = s.run(
+                "MATCH (sp:Specimen {specimen_id:'SP_LR01'})-[:TESTED_FOR]->(lr:LabResult {lab_id:'LR_LINK01'}) RETURN lr"
+            ).single()
+        assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# HIVViralLoadRepository
+# ---------------------------------------------------------------------------
+
+class TestHIVViralLoadRepository:
+    def test_create_get_delete(self, graph):
+        vl = HIVViralLoad(
+            viral_load_id="VL001",
+            test_date=date(2025, 3, 15),
+            value_copies_per_ml=50000,
+            log10_value=4.699,
+            detection_limit=50,
+            assay_type="Abbott RealTime HIV-1",
+            result_status="detected",
+        )
+        graph.hiv_viral_loads.create(vl)
+
+        fetched = graph.hiv_viral_loads.get("VL001")
+        assert fetched is not None
+        assert fetched.viral_load_id == "VL001"
+        assert fetched.value_copies_per_ml == 50000
+        assert fetched.result_status == "detected"
+        assert fetched.test_date == date(2025, 3, 15)
+
+        graph.hiv_viral_loads.delete("VL001")
+        assert graph.hiv_viral_loads.get("VL001") is None
+
+    def test_get_nonexistent_returns_none(self, graph):
+        assert graph.hiv_viral_loads.get("DOES_NOT_EXIST") is None
+
+    def test_link_patient(self, graph):
+        graph.patients.create(Patient(patient_id="P_VL01", firstname="A", lastname="B", age=35))
+        graph.hiv_viral_loads.create(HIVViralLoad(viral_load_id="VL_LINK01", result_status="undetected"))
+        graph.hiv_viral_loads.link_patient("VL_LINK01", "P_VL01")
+
+        with graph.driver.session() as s:
+            result = s.run(
+                "MATCH (p:Patient {patient_id:'P_VL01'})-[:HAS_HIV_VIRAL_LOAD_RESULT]->(vl:HIVViralLoad {viral_load_id:'VL_LINK01'}) RETURN vl"
+            ).single()
+        assert result is not None

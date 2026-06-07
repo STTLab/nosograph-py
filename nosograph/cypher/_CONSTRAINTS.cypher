@@ -55,6 +55,12 @@ FOR (lr:LabResult) REQUIRE lr.lab_id IS NOT NULL;
 CREATE CONSTRAINT lab_result_id_unique IF NOT EXISTS
 FOR (lr:LabResult) REQUIRE lr.lab_id IS UNIQUE;
 
+// HIVViralLoad
+CREATE CONSTRAINT hiv_viral_load_must_have_id IF NOT EXISTS
+FOR (vl:HIVViralLoad) REQUIRE vl.viral_load_id IS NOT NULL;
+CREATE CONSTRAINT hiv_viral_load_id_must_be_unique IF NOT EXISTS
+FOR (vl:HIVViralLoad) REQUIRE vl.viral_load_id IS UNIQUE;
+
 // Variant
 // variant_key = REF_ACC + ":" + POS + ":" + REF + ">" + ALT
 // i.e. NC_000001.11:123456:A>G
