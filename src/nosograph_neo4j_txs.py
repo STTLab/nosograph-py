@@ -38,7 +38,7 @@ def _get_patient_by_id(tx: ManagedTransaction, patient_id):
 @staticmethod
 def _create_patient_tx(tx: ManagedTransaction, patient_id, firstname, lastname, sex, dob, age):
     result = tx.run(
-        query=CYPHERS['create_patient'],
+        query=CYPHERS['CREATE_Patient'],
         patient_id=patient_id,
         firstname=firstname,
         lastname=lastname,
@@ -55,7 +55,7 @@ def _create_assembly_run(
         created_at: datetime|None = None
     ) -> NodeCreateOrMatchStats:
     result = tx.run(
-        query=CYPHERS['CREATE_AssemblyEvent'],
+        query=CYPHERS['CREATE_AssemblyRun'],
         assembly_id=assembly_id,
         assembler=assembler,
         created_at=created_at or datetime.now(UTC)
