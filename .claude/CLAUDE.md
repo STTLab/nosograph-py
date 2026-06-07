@@ -28,22 +28,26 @@ nosograph-py/
 │   ├── cli.py               ← interactive terminal UI (prompt_toolkit)
 │   ├── _txs.py              ← private transaction functions (internal)
 │   ├── models/
-│   │   ├── patient.py       ← Patient, Admission, Ward, Department (Pydantic v2)
+│   │   ├── patient.py       ← Patient, Admission, OpdVisit, Ward, Department (Pydantic v2)
 │   │   ├── specimen.py      ← Specimen, Sample
-│   │   └── genomics.py      ← Organism, ReferenceGenome, Assembly, Contig, Variant
+│   │   ├── genomics.py      ← Organism, ReferenceGenome, Assembly, Contig, Variant
+│   │   └── lab.py           ← LabResult, HIVViralLoad
 │   ├── repositories/
 │   │   ├── _base.py         ← BaseRepository(driver)
 │   │   ├── patient.py       ← PatientRepository
 │   │   ├── admission.py     ← AdmissionRepository
 │   │   ├── specimen.py      ← SpecimenRepository, SampleRepository
 │   │   ├── genomics.py      ← OrganismRepository, AssemblyRepository, ReferenceGenomeRepository
-│   │   └── clinical.py      ← WardRepository, DepartmentRepository
+│   │   └── clinical.py      ← WardRepository, DepartmentRepository, LabResultRepository, HIVViralLoadRepository, OpdVisitRepository
 │   └── cypher/              ← all .cypher files (loaded via importlib.resources)
 └── tests/
-    ├── unit/test_models.py       ← 22 tests, no DB required
+    ├── unit/
+    │   ├── test_models.py   ← 25 tests (models only, no DB required)
+    │   ├── test_types.py    ← 17 tests (Neo4JAuth, TypedDicts)
+    │   └── test_db.py       ← 28 tests (NosoGraph, mocked driver)
     └── integration/
         ├── conftest.py           ← testcontainers Neo4j fixture (skips if Docker unavailable)
-        └── test_repositories.py  ← 19 tests, requires Docker
+        └── test_repositories.py  ← 25 tests, requires Docker
 ```
 
 ---
@@ -62,18 +66,19 @@ nosograph-py/
 
 | Entity | CREATE | GET | DELETE | Relationships | Repository |
 |---|---|---|---|---|---|
-| Patient | ✅ | ✅ | ✅ | HAS_ADMISSION | ✅ PatientRepository |
+| Patient | ✅ | ✅ | ✅ | HAS_ADMISSION, HAS_OPD_VISIT | ✅ PatientRepository |
 | Admission | ✅ | ✅ | ✅ | ADMITTED_TO | ✅ AdmissionRepository |
-| Specimen | ✅ | ✅ | ✅ | COLLECTED_FROM | ✅ SpecimenRepository |
+| OpdVisit | ✅ | ✅ | ✅ | HAS_OPD_VISIT, COLLECTED_AT_VISIT | ✅ OpdVisitRepository |
+| Specimen | ✅ | ✅ | ✅ | COLLECTED_FROM, TESTED_FOR, COLLECTED_AT_VISIT | ✅ SpecimenRepository |
 | Sample | ✅ | ✅ | ✅ | HAS_ASSEMBLY | ✅ SampleRepository |
 | Assembly | ✅ | ✅ | ✅ (cascade) | HAS_CONTIG | ✅ AssemblyRepository |
 | Organism | ✅ | ✅ | ✅ | REFERENCE_GENOME_OF | ✅ OrganismRepository |
 | ReferenceGenome | ✅ | ✅ | ✅ | — | ✅ ReferenceGenomeRepository |
 | Ward | ✅ | ✅ | — | IN_DEPARTMENT | ✅ WardRepository |
 | Department | ✅ | ✅ | — | — | ✅ DepartmentRepository |
+| LabResult | ✅ | ✅ | ✅ | TESTED_FOR | ✅ LabResultRepository |
+| HIVViralLoad | ✅ | ✅ | ✅ | HAS_HIV_VIRAL_LOAD_RESULT | ✅ HIVViralLoadRepository |
 | Variant | ✅ (Cypher) | ✅ (Cypher) | — | — | ❌ no repository yet |
-| LabResult | ❌ | ❌ | ❌ | — | ❌ |
-| HIVViralLoad | ❌ | ❌ | ❌ | — | ❌ |
 
 ---
 
@@ -86,7 +91,6 @@ All 8 bugs from the initial audit (2026-06-07) are resolved.
 ## What Is Still Missing
 
 - `VariantRepository` — Cypher files and transaction functions exist; repository class missing
-- `LabResult` and `HIVViralLoad` — no Cypher, no model, no repository
 - Stanford HIVDR module — `sierrapy` conda env exists in the monorepo, no Python code yet
 - `cli.py` stubs: `create_sample()`, `print_sample_info()`, `load_csv()`, `pipeline_prompt()` (full form)
 - `NosoGraphPipelineOutput.check_output_files()` for Canu assembler (`NotImplementedError`)
@@ -96,24 +100,22 @@ All 8 bugs from the initial audit (2026-06-07) are resolved.
 
 ## Recommended Next Actions
 
-### Priority 3 — Variant + LabResult repositories
+### Priority 3 — Variant repository
 1. Add `VariantRepository` in `repositories/genomics.py`
-2. Add `LabResult` model (polymorphic: CBC, BacterialCulture, etc.) + Cypher + repository
-3. Add `HIVViralLoad` model + Cypher + repository
 
 ### Priority 4 — HIV/Drug resistance module
-4. Implement sierrapy integration (`conda/sierrapy.yaml` in the monorepo)
-5. Add `StanfordHIVDRPrediction` Cypher + repository
-6. Add `PREDICTS_RESISTANCE_TO` relationship
+2. Implement sierrapy integration (`conda/sierrapy.yaml` in the monorepo)
+3. Add `StanfordHIVDRPrediction` Cypher + repository
+4. Add `PREDICTS_RESISTANCE_TO` relationship
 
 ### Priority 5 — CLI & ETL completion
-7. Complete `cli.py` stubs for sample and pipeline upload
-8. Implement `load_csv()` for bulk import via pandas
-9. Implement Canu output checker in `pipeline.py`
+5. Complete `cli.py` stubs for sample and pipeline upload
+6. Implement `load_csv()` for bulk import via pandas
+7. Implement Canu output checker in `pipeline.py`
 
 ### Priority 6 — Analytical queries & reporting
-10. Add `MATCH_` queries for multi-hop traversals (patient → specimens → assemblies)
-11. Implement FR-07 reporting output
+8. Add `MATCH_` queries for multi-hop traversals (patient → OpdVisit/Admission → specimens → assemblies)
+9. Implement FR-07 reporting output
 
 ---
 
