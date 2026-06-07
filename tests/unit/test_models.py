@@ -1,0 +1,155 @@
+from datetime import date
+import pytest
+from pydantic import ValidationError
+from nosograph.models.patient import Patient, Admission, Ward, Department
+from nosograph.models.specimen import Specimen, Sample
+from nosograph.models.genomics import Organism, ReferenceGenome, Assembly, Contig, Variant
+
+
+# ---------------------------------------------------------------------------
+# Patient
+# ---------------------------------------------------------------------------
+
+class TestPatient:
+    def test_valid_with_age(self):
+        p = Patient(patient_id="P001", firstname="Alice", lastname="Smith", age=30)
+        assert p.age == 30
+        assert p.date_of_birth is None
+
+    def test_valid_with_dob(self):
+        p = Patient(patient_id="P002", firstname="Bob", lastname="Jones", date_of_birth=date(1990, 1, 1))
+        assert p.date_of_birth == date(1990, 1, 1)
+
+    def test_requires_dob_or_age(self):
+        with pytest.raises(ValidationError, match="date_of_birth or age"):
+            Patient(patient_id="P003", firstname="X", lastname="Y")
+
+    def test_sex_must_be_m_or_f(self):
+        with pytest.raises(ValidationError):
+            Patient(patient_id="P004", firstname="X", lastname="Y", age=25, sex="Z")
+
+    def test_sex_optional(self):
+        p = Patient(patient_id="P005", firstname="X", lastname="Y", age=25)
+        assert p.sex is None
+
+
+# ---------------------------------------------------------------------------
+# Admission
+# ---------------------------------------------------------------------------
+
+class TestAdmission:
+    def test_valid_minimal(self):
+        a = Admission(admission_id="A001")
+        assert a.admission_id == "A001"
+
+    def test_valid_with_dates(self):
+        a = Admission(
+            admission_id="A002",
+            date_of_admission=date(2025, 1, 1),
+            date_of_discharge=date(2025, 1, 10),
+        )
+        assert a.length_of_stay is None  # computed by DB, not here
+
+    def test_discharge_before_admission_raises(self):
+        with pytest.raises(ValidationError, match="before date_of_admission"):
+            Admission(
+                admission_id="A003",
+                date_of_admission=date(2025, 5, 10),
+                date_of_discharge=date(2025, 5, 1),
+            )
+
+
+# ---------------------------------------------------------------------------
+# Ward / Department
+# ---------------------------------------------------------------------------
+
+class TestWard:
+    def test_valid(self):
+        w = Ward(ward_id="W1", name="ICU", department_id="D1")
+        assert w.ward_id == "W1"
+
+    def test_optional_fields(self):
+        w = Ward(ward_id="W2", name="Pediatrics", department_id="D2", ward_type="Inpatient")
+        assert w.ward_type == "Inpatient"
+        assert w.description is None
+
+
+class TestDepartment:
+    def test_valid(self):
+        d = Department(department_id="D1", name="Surgery")
+        assert d.description is None
+
+
+# ---------------------------------------------------------------------------
+# Specimen / Sample
+# ---------------------------------------------------------------------------
+
+class TestSpecimen:
+    def test_valid_minimal(self):
+        s = Specimen(specimen_id="SP001")
+        assert s.specimen_type is None
+
+    def test_valid_with_type(self):
+        s = Specimen(specimen_id="SP002", specimen_type="Blood")
+        assert s.specimen_type == "Blood"
+
+
+class TestSample:
+    def test_valid(self):
+        s = Sample(sample_id="SAM001")
+        assert s.sample_id == "SAM001"
+
+
+# ---------------------------------------------------------------------------
+# Genomics
+# ---------------------------------------------------------------------------
+
+class TestOrganism:
+    def test_valid(self):
+        o = Organism(taxid="1280", sciname="Staphylococcus aureus")
+        assert o.taxid == "1280"
+
+
+class TestReferenceGenome:
+    def test_valid_minimal(self):
+        r = ReferenceGenome(accession_no="NC_007795.1")
+        assert r.name is None
+
+    def test_valid_full(self):
+        r = ReferenceGenome(
+            accession_no="NC_007795.1",
+            name="Staph aureus MRSA252",
+            molecular_type="genomic DNA",
+            strain="MRSA252",
+            annotation_source="RefSeq",
+            source_database="NCBI",
+        )
+        assert r.strain == "MRSA252"
+
+
+class TestAssembly:
+    def test_valid_minimal(self):
+        a = Assembly(assembly_id="ASM001")
+        assert a.assembler is None
+
+
+class TestContig:
+    def test_valid(self):
+        c = Contig(contig_id="c1", length=500, sequence="ATCG", sequence_hash="abc123")
+        assert c.hash_algorithm == "md5"
+
+
+class TestVariant:
+    def test_variant_key_computed(self):
+        v = Variant(REF_ACC="NC_000001.11", POS=123456, REF="A", ALT="G")
+        assert v.variant_key == "NC_000001.11:123456:A>G"
+
+    def test_variant_key_in_model_dump(self):
+        v = Variant(REF_ACC="NC_000001.11", POS=1, REF="C", ALT="T")
+        d = v.model_dump()
+        assert d["variant_key"] == "NC_000001.11:1:C>T"
+
+    def test_optional_fields_default_none(self):
+        v = Variant(REF_ACC="X", POS=1, REF="A", ALT="T")
+        assert v.DP is None
+        assert v.EFFECT is None
