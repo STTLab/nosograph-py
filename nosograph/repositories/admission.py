@@ -19,10 +19,13 @@ class AdmissionRepository(BaseRepository):
             raw = session.execute_read(txs._get_admission, admission_id)
         if raw is None:
             return None
+        def _to_native(val):
+            return val.to_native() if hasattr(val, "to_native") else val
+
         return Admission.model_validate({
             "admission_id": raw.get("admission_id"),
-            "date_of_admission": raw.get("date_of_admission"),
-            "date_of_discharge": raw.get("date_of_discharge"),
+            "date_of_admission": _to_native(raw.get("date_of_admission")),
+            "date_of_discharge": _to_native(raw.get("date_of_discharge")),
             "length_of_stay": raw.get("length_of_stay"),
         })
 
