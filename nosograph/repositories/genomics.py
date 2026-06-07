@@ -5,12 +5,15 @@ import nosograph._txs as txs
 
 
 class OrganismRepository(BaseRepository):
+    """CRUD for Organism nodes."""
 
     def create(self, organism: Organism) -> str:
+        """Create an Organism node (idempotent) and return its taxid."""
         with self._driver.session() as session:
             return session.execute_write(txs._create_organism, organism.taxid, organism.sciname)
 
     def get(self, taxid: str) -> Organism | None:
+        """Return an Organism by NCBI taxid, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_organism, taxid)
         if raw is None:
@@ -18,17 +21,21 @@ class OrganismRepository(BaseRepository):
         return Organism.model_validate({"taxid": raw.get("taxid"), "sciname": raw.get("sciname")})
 
     def delete(self, taxid: str) -> None:
+        """Delete an Organism node and all its relationships."""
         with self._driver.session() as session:
             session.execute_write(txs._delete_organism, taxid)
 
     def link_reference_genome(self, taxid: str, accession_no: str) -> None:
+        """Create a REFERENCE_GENOME_OF relationship from ReferenceGenome to an existing Organism node."""
         with self._driver.session() as session:
             session.execute_write(txs._link_organism_reference_genome, taxid, accession_no)
 
 
 class AssemblyRepository(BaseRepository):
+    """CRUD for Assembly nodes."""
 
     def create(self, assembly: Assembly) -> NodeCreateOrMatchStats:
+        """Create or match an Assembly node; returns node creation/match stats."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_assembly_run,
@@ -38,6 +45,7 @@ class AssemblyRepository(BaseRepository):
             )
 
     def get(self, assembly_id: str) -> Assembly | None:
+        """Return an Assembly by assembly_id, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_assembly, assembly_id)
         if raw is None:
@@ -50,10 +58,12 @@ class AssemblyRepository(BaseRepository):
         })
 
     def delete(self, assembly_id: str) -> None:
+        """Delete an Assembly node and all its relationships, including linked Contig nodes."""
         with self._driver.session() as session:
             session.execute_write(txs._delete_assembly, assembly_id)
 
     def add_contigs(self, assembly_id: str, contigs: list[Contig]) -> NodeAndRelationshipCreationStats:
+        """Bulk-create Contig nodes and link them to an Assembly via HAS_CONTIG. Raises ValueError if assembly not found."""
         contig_dicts: list[ContigProps] = [
             {
                 "contig_id": c.contig_id,
@@ -69,8 +79,10 @@ class AssemblyRepository(BaseRepository):
 
 
 class ReferenceGenomeRepository(BaseRepository):
+    """CRUD for ReferenceGenome nodes."""
 
     def create(self, ref_genome: ReferenceGenome) -> str:
+        """Create a ReferenceGenome node (idempotent) and return its accession_no."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_reference_genome,
@@ -83,6 +95,7 @@ class ReferenceGenomeRepository(BaseRepository):
             )
 
     def get(self, accession_no: str) -> ReferenceGenome | None:
+        """Return a ReferenceGenome by NCBI accession number, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_reference_genome, accession_no)
         if raw is None:
@@ -97,5 +110,6 @@ class ReferenceGenomeRepository(BaseRepository):
         })
 
     def delete(self, accession_no: str) -> None:
+        """Delete a ReferenceGenome node and all its relationships."""
         with self._driver.session() as session:
             session.execute_write(txs._delete_reference_genome, accession_no)

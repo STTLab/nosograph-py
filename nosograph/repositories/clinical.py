@@ -5,8 +5,10 @@ import nosograph._txs as txs
 
 
 class WardRepository(BaseRepository):
+    """CRUD for Ward nodes."""
 
     def create(self, ward: Ward) -> str:
+        """Create a Ward node (idempotent) and return its ward_id."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_ward,
@@ -18,6 +20,7 @@ class WardRepository(BaseRepository):
             )
 
     def get(self, ward_id: str) -> Ward | None:
+        """Return a Ward by ward_id, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_ward, ward_id)
         if raw is None:
@@ -31,13 +34,16 @@ class WardRepository(BaseRepository):
         })
 
     def link_department(self, ward_id: str, department_id: str) -> None:
+        """Create an IN_DEPARTMENT relationship from Ward to an existing Department node."""
         with self._driver.session() as session:
             session.execute_write(txs._link_ward_department, ward_id, department_id)
 
 
 class DepartmentRepository(BaseRepository):
+    """CRUD for Department nodes."""
 
     def create(self, dept: Department) -> str:
+        """Create a Department node (idempotent) and return its department_id."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_department,
@@ -47,6 +53,7 @@ class DepartmentRepository(BaseRepository):
             )
 
     def get(self, department_id: str) -> Department | None:
+        """Return a Department by department_id, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_department, department_id)
         if raw is None:
@@ -59,8 +66,10 @@ class DepartmentRepository(BaseRepository):
 
 
 class LabResultRepository(BaseRepository):
+    """CRUD for LabResult nodes. result_type is stored as a property (e.g. 'CBC', 'BacterialCulture')."""
 
     def create(self, lab_result: LabResult) -> str:
+        """Create a LabResult node (idempotent) and return its lab_id."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_lab_result,
@@ -74,6 +83,7 @@ class LabResultRepository(BaseRepository):
             )
 
     def get(self, lab_id: str) -> LabResult | None:
+        """Return a LabResult by lab_id, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_lab_result, lab_id)
         if raw is None:
@@ -92,17 +102,21 @@ class LabResultRepository(BaseRepository):
         })
 
     def delete(self, lab_id: str) -> None:
+        """Delete a LabResult node and all its relationships."""
         with self._driver.session() as session:
             session.execute_write(txs._delete_lab_result, lab_id)
 
     def link_specimen(self, lab_id: str, specimen_id: str) -> None:
+        """Create a TESTED_FOR relationship from an existing Specimen node to this LabResult."""
         with self._driver.session() as session:
             session.execute_write(txs._link_specimen_lab_result, specimen_id, lab_id)
 
 
 class HIVViralLoadRepository(BaseRepository):
+    """CRUD for HIVViralLoad nodes."""
 
     def create(self, vl: HIVViralLoad) -> str:
+        """Create a HIVViralLoad node (idempotent) and return its viral_load_id."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_hiv_viral_load,
@@ -116,6 +130,7 @@ class HIVViralLoadRepository(BaseRepository):
             )
 
     def get(self, viral_load_id: str) -> HIVViralLoad | None:
+        """Return a HIVViralLoad by viral_load_id, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_hiv_viral_load, viral_load_id)
         if raw is None:
@@ -134,9 +149,11 @@ class HIVViralLoadRepository(BaseRepository):
         })
 
     def delete(self, viral_load_id: str) -> None:
+        """Delete a HIVViralLoad node and all its relationships."""
         with self._driver.session() as session:
             session.execute_write(txs._delete_hiv_viral_load, viral_load_id)
 
     def link_patient(self, viral_load_id: str, patient_id: str) -> None:
+        """Create a HAS_HIV_VIRAL_LOAD_RESULT relationship from an existing Patient node to this HIVViralLoad."""
         with self._driver.session() as session:
             session.execute_write(txs._link_patient_hiv_viral_load, patient_id, viral_load_id)
