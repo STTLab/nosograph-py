@@ -2,6 +2,7 @@ import pytest
 import docker
 from testcontainers.neo4j import Neo4jContainer
 from nosograph import NosoGraph
+from nosograph.types import Neo4JAuth
 
 
 def _docker_available() -> bool:
@@ -28,7 +29,8 @@ def neo4j_container():
 
 @pytest.fixture(scope="session")
 def graph(neo4j_container):
-    with NosoGraph(neo4j_container.get_connection_url()) as g:
+    auth = Neo4JAuth(user="neo4j", password=neo4j_container.password)
+    with NosoGraph(neo4j_container.get_connection_url(), auth=auth) as g:
         yield g
 
 
