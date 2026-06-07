@@ -42,10 +42,11 @@ class AssemblyRepository(BaseRepository):
             raw = session.execute_read(txs._get_assembly, assembly_id)
         if raw is None:
             return None
+        created_at = raw.get("created_at")
         return Assembly.model_validate({
             "assembly_id": raw.get("assembly_id"),
             "assembler": raw.get("assembler"),
-            "created_at": raw.get("created_at"),
+            "created_at": created_at.to_native() if hasattr(created_at, "to_native") else created_at,
         })
 
     def delete(self, assembly_id: str) -> None:
