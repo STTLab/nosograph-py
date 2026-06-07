@@ -22,6 +22,12 @@ FOR (patient:Patient) REQUIRE patient.patient_id IS NOT NULL;
 CREATE CONSTRAINT patient_id_must_be_unique IF NOT EXISTS
 FOR (patient:Patient) REQUIRE patient.patient_id IS UNIQUE;
 
+// OpdVisit
+CREATE CONSTRAINT opd_visit_must_have_id IF NOT EXISTS
+FOR (v:OpdVisit) REQUIRE v.visit_id IS NOT NULL;
+CREATE CONSTRAINT opd_visit_id_must_be_unique IF NOT EXISTS
+FOR (v:OpdVisit) REQUIRE v.visit_id IS UNIQUE;
+
 // Admission
 CREATE CONSTRAINT admission_must_have_id IF NOT EXISTS
 FOR (admission:Admission) REQUIRE admission.admission_id IS NOT NULL;

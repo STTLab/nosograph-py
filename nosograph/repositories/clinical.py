@@ -1,5 +1,5 @@
 from nosograph.repositories._base import BaseRepository
-from nosograph.models.patient import Ward, Department
+from nosograph.models.patient import Ward, Department, OpdVisit
 from nosograph.models.lab import LabResult, HIVViralLoad
 import nosograph._txs as txs
 
@@ -157,3 +157,54 @@ class HIVViralLoadRepository(BaseRepository):
         """Create a HAS_HIV_VIRAL_LOAD_RESULT relationship from an existing Patient node to this HIVViralLoad."""
         with self._driver.session() as session:
             session.execute_write(txs._link_patient_hiv_viral_load, patient_id, viral_load_id)
+
+
+class OpdVisitRepository(BaseRepository):
+    """CRUD for OpdVisit nodes.
+
+    An OPD (outpatient department) visit is a same-day clinic encounter.
+    It is distinct from an inpatient ``Admission``.  Patients attend OPD
+    clinics for follow-up, initial assessments, or chronic-disease
+    management (e.g. HIV Clinic, ANC).  Lab specimens collected during
+    the encounter can be linked to the visit via
+    :meth:`SpecimenRepository.link_visit`.
+    """
+
+    def create(self, visit: OpdVisit) -> str:
+        """Create an OpdVisit node (idempotent) and return its visit_id."""
+        with self._driver.session() as session:
+            return session.execute_write(
+                txs._create_opd_visit,
+                visit.visit_id,
+                visit.visit_date.isoformat() if visit.visit_date else None,
+                visit.clinic,
+                visit.chief_complaint,
+                visit.notes,
+            )
+
+    def get(self, visit_id: str) -> OpdVisit | None:
+        """Return an OpdVisit by visit_id, or None if not found."""
+        with self._driver.session() as session:
+            raw = session.execute_read(txs._get_opd_visit, visit_id)
+        if raw is None:
+            return None
+        def _to_native(val):
+            return val.to_native() if hasattr(val, "to_native") else val
+
+        return OpdVisit.model_validate({
+            "visit_id": raw.get("visit_id"),
+            "visit_date": _to_native(raw.get("visit_date")),
+            "clinic": raw.get("clinic"),
+            "chief_complaint": raw.get("chief_complaint"),
+            "notes": raw.get("notes"),
+        })
+
+    def delete(self, visit_id: str) -> None:
+        """Delete an OpdVisit node and all its relationships."""
+        with self._driver.session() as session:
+            session.execute_write(txs._delete_opd_visit, visit_id)
+
+    def link_patient(self, visit_id: str, patient_id: str) -> None:
+        """Create a HAS_OPD_VISIT relationship from an existing Patient node to this OpdVisit."""
+        with self._driver.session() as session:
+            session.execute_write(txs._link_patient_opd_visit, patient_id, visit_id)

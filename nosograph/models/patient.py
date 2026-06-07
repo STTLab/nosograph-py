@@ -33,6 +33,31 @@ class Admission(BaseModel):
         return self
 
 
+class OpdVisit(BaseModel):
+    """A single outpatient (OPD) clinic encounter for a patient.
+
+    OPD visits are same-day encounters; they are distinct from inpatient
+    ``Admission`` nodes.  A visit records the clinic, the reason for
+    attendance, and free-text notes made by the clinician.  Specimens
+    collected during the visit can be linked via the
+    ``COLLECTED_AT_VISIT`` relationship.
+
+    Attributes:
+        visit_id: Unique identifier for this OPD encounter.
+        visit_date: Calendar date of the visit.
+        clinic: Name or specialty of the outpatient clinic (e.g. "HIV Clinic",
+            "Internal Medicine").
+        chief_complaint: The patient's primary reason for attending.
+        notes: Free-text clinician notes recorded during the visit.
+    """
+
+    visit_id: str
+    visit_date: Optional[date] = None
+    clinic: Optional[str] = None
+    chief_complaint: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class Ward(BaseModel):
     ward_id: str
     name: str
