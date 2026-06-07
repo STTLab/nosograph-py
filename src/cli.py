@@ -225,10 +225,8 @@ class NosoGraphCLI():
                 sample = self.get_sample(sample_id)
                 self.print_sample_info(sample)
             case 3:
-                pass
-            case 4:
                 return
-            
+
     @staticmethod
     def pipeline_prompt():
         print('Path to Long reads FASTQ (gzipped or not)')

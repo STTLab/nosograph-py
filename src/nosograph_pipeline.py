@@ -194,7 +194,7 @@ class NosoGraphPipelineOutput():
             
             self._logger.info(f'{expect:_<30}: {GREEN if dir_exists else RED+"Not "}Found{RESET}')
             checked.append(dir_exists) 
-        return all([os.path.isdir(expect) ])
+        return all(checked)
 
     def check_output_files(self) -> bool:
         '''
