@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from nosograph.models.patient import Patient, Admission, Ward, Department
 from nosograph.models.specimen import Specimen, Sample
 from nosograph.models.genomics import Organism, ReferenceGenome, Assembly, Contig, Variant
+from nosograph.models.lab import LabResult, HIVViralLoad
 
 
 # ---------------------------------------------------------------------------
@@ -153,3 +154,69 @@ class TestVariant:
         v = Variant(REF_ACC="X", POS=1, REF="A", ALT="T")
         assert v.DP is None
         assert v.EFFECT is None
+
+
+# ---------------------------------------------------------------------------
+# LabResult
+# ---------------------------------------------------------------------------
+
+class TestLabResult:
+    def test_minimal(self):
+        lr = LabResult(lab_id="LR001")
+        assert lr.lab_id == "LR001"
+        assert lr.result_type is None
+        assert lr.test_date is None
+
+    def test_full(self):
+        lr = LabResult(
+            lab_id="LR002",
+            specimen_id="SP001",
+            result_type="CBC",
+            test_date=date(2025, 6, 1),
+            value="12.5",
+            unit="g/dL",
+            notes="Mild anaemia",
+        )
+        assert lr.result_type == "CBC"
+        assert lr.test_date == date(2025, 6, 1)
+        assert lr.value == "12.5"
+
+    def test_lab_id_required(self):
+        with pytest.raises(ValidationError):
+            LabResult()
+
+
+# ---------------------------------------------------------------------------
+# HIVViralLoad
+# ---------------------------------------------------------------------------
+
+class TestHIVViralLoad:
+    def test_minimal(self):
+        vl = HIVViralLoad(viral_load_id="VL001")
+        assert vl.viral_load_id == "VL001"
+        assert vl.value_copies_per_ml is None
+
+    def test_detected(self):
+        vl = HIVViralLoad(
+            viral_load_id="VL002",
+            test_date=date(2025, 3, 15),
+            value_copies_per_ml=50000,
+            log10_value=4.699,
+            detection_limit=50,
+            assay_type="Abbott RealTime HIV-1",
+            result_status="detected",
+        )
+        assert vl.result_status == "detected"
+        assert vl.value_copies_per_ml == 50000
+
+    def test_undetected(self):
+        vl = HIVViralLoad(viral_load_id="VL003", result_status="undetected")
+        assert vl.result_status == "undetected"
+
+    def test_invalid_status(self):
+        with pytest.raises(ValidationError):
+            HIVViralLoad(viral_load_id="VL004", result_status="positive")
+
+    def test_viral_load_id_required(self):
+        with pytest.raises(ValidationError):
+            HIVViralLoad()

@@ -326,6 +326,94 @@ def _get_department(tx: ManagedTransaction, department_id: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# LabResult
+# ---------------------------------------------------------------------------
+
+def _create_lab_result(
+    tx: ManagedTransaction,
+    lab_id: str,
+    specimen_id: str | None,
+    result_type: str | None,
+    test_date: str | None,
+    value: str | None,
+    unit: str | None,
+    notes: str | None,
+) -> str:
+    tx.run(
+        CYPHERS["CREATE_LabResult"],
+        lab_id=lab_id,
+        specimen_id=specimen_id,
+        result_type=result_type,
+        test_date=test_date,
+        value=value,
+        unit=unit,
+        notes=notes,
+    )
+    return lab_id
+
+
+def _get_lab_result(tx: ManagedTransaction, lab_id: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_LabResult"], lab_id=lab_id).single()
+    return dict(record["lr"]) if record else None
+
+
+def _delete_lab_result(tx: ManagedTransaction, lab_id: str) -> None:
+    tx.run(CYPHERS["DELETE_LabResult"], lab_id=lab_id)
+
+
+def _link_specimen_lab_result(tx: ManagedTransaction, specimen_id: str, lab_id: str) -> None:
+    tx.run(
+        CYPHERS["ASSOCIATE_Specimen_TESTED_FOR_LabResult"],
+        specimen_id=specimen_id,
+        lab_id=lab_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# HIVViralLoad
+# ---------------------------------------------------------------------------
+
+def _create_hiv_viral_load(
+    tx: ManagedTransaction,
+    viral_load_id: str,
+    test_date: str | None,
+    value_copies_per_ml: int | None,
+    log10_value: float | None,
+    detection_limit: int | None,
+    assay_type: str | None,
+    result_status: str | None,
+) -> str:
+    tx.run(
+        CYPHERS["CREATE_HIVViralLoad"],
+        viral_load_id=viral_load_id,
+        test_date=test_date,
+        value_copies_per_ml=value_copies_per_ml,
+        log10_value=log10_value,
+        detection_limit=detection_limit,
+        assay_type=assay_type,
+        result_status=result_status,
+    )
+    return viral_load_id
+
+
+def _get_hiv_viral_load(tx: ManagedTransaction, viral_load_id: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_HIVViralLoad"], viral_load_id=viral_load_id).single()
+    return dict(record["vl"]) if record else None
+
+
+def _delete_hiv_viral_load(tx: ManagedTransaction, viral_load_id: str) -> None:
+    tx.run(CYPHERS["DELETE_HIVViralLoad"], viral_load_id=viral_load_id)
+
+
+def _link_patient_hiv_viral_load(tx: ManagedTransaction, patient_id: str, viral_load_id: str) -> None:
+    tx.run(
+        CYPHERS["ASSOCIATE_Patient_HAS_HIV_VIRAL_LOAD_RESULT"],
+        patient_id=patient_id,
+        viral_load_id=viral_load_id,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Variant
 # ---------------------------------------------------------------------------
 

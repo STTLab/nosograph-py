@@ -5,7 +5,7 @@ from nosograph.repositories.patient import PatientRepository
 from nosograph.repositories.admission import AdmissionRepository
 from nosograph.repositories.specimen import SpecimenRepository, SampleRepository
 from nosograph.repositories.genomics import OrganismRepository, AssemblyRepository, ReferenceGenomeRepository
-from nosograph.repositories.clinical import WardRepository, DepartmentRepository
+from nosograph.repositories.clinical import WardRepository, DepartmentRepository, LabResultRepository, HIVViralLoadRepository
 import nosograph._txs as _txs
 
 
@@ -23,6 +23,8 @@ class NosoGraph(GraphDatabase):
         self._reference_genomes = ReferenceGenomeRepository(self._driver)
         self._wards = WardRepository(self._driver)
         self._departments = DepartmentRepository(self._driver)
+        self._lab_results = LabResultRepository(self._driver)
+        self._hiv_viral_loads = HIVViralLoadRepository(self._driver)
 
     def __enter__(self) -> "NosoGraph":
         self.verify()
@@ -70,6 +72,14 @@ class NosoGraph(GraphDatabase):
     @property
     def departments(self) -> DepartmentRepository:
         return self._departments
+
+    @property
+    def lab_results(self) -> LabResultRepository:
+        return self._lab_results
+
+    @property
+    def hiv_viral_loads(self) -> HIVViralLoadRepository:
+        return self._hiv_viral_loads
 
     def verify(self) -> None:
         try:

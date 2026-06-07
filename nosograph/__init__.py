@@ -3,6 +3,7 @@ from nosograph.types import Neo4JAuth
 from nosograph.models.patient import Patient, Admission, Ward, Department
 from nosograph.models.specimen import Specimen, Sample
 from nosograph.models.genomics import Organism, ReferenceGenome, Assembly, Contig, Variant
+from nosograph.models.lab import LabResult, HIVViralLoad
 
 __all__ = [
     "NosoGraph",
@@ -18,4 +19,6 @@ __all__ = [
     "Assembly",
     "Contig",
     "Variant",
+    "LabResult",
+    "HIVViralLoad",
 ]
