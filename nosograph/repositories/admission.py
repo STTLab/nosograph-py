@@ -4,8 +4,10 @@ import nosograph._txs as txs
 
 
 class AdmissionRepository(BaseRepository):
+    """CRUD for Admission nodes."""
 
     def create(self, admission: Admission) -> str:
+        """Create an Admission node (idempotent) and return its admission_id."""
         with self._driver.session() as session:
             return session.execute_write(
                 txs._create_admission,
@@ -15,6 +17,7 @@ class AdmissionRepository(BaseRepository):
             )
 
     def get(self, admission_id: str) -> Admission | None:
+        """Return an Admission by admission_id, or None if not found."""
         with self._driver.session() as session:
             raw = session.execute_read(txs._get_admission, admission_id)
         if raw is None:
@@ -30,6 +33,7 @@ class AdmissionRepository(BaseRepository):
         })
 
     def delete(self, admission_id: str) -> None:
+        """Delete an Admission node and all its relationships."""
         with self._driver.session() as session:
             session.execute_write(txs._delete_admission, admission_id)
 
@@ -40,5 +44,6 @@ class AdmissionRepository(BaseRepository):
         room_no: str | None = None,
         bed_no: str | None = None,
     ) -> None:
+        """Create an ADMITTED_TO relationship from Admission to an existing Ward node."""
         with self._driver.session() as session:
             session.execute_write(txs._link_admission_ward, admission_id, ward_id, room_no, bed_no)
