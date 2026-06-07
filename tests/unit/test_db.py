@@ -15,6 +15,7 @@ from nosograph.repositories.clinical import (
     DepartmentRepository,
     LabResultRepository,
     HIVViralLoadRepository,
+    OpdVisitRepository,
 )
 
 
@@ -101,6 +102,9 @@ class TestRepositoryProperties:
 
     def test_hiv_viral_loads_property(self, graph):
         assert isinstance(graph.hiv_viral_loads, HIVViralLoadRepository)
+
+    def test_opd_visits_property(self, graph):
+        assert isinstance(graph.opd_visits, OpdVisitRepository)
 
     def test_driver_property(self, graph, mock_driver):
         assert graph.driver is mock_driver

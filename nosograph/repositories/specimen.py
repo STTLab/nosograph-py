@@ -32,6 +32,11 @@ class SpecimenRepository(BaseRepository):
         with self._driver.session() as session:
             session.execute_write(txs._link_specimen_patient, specimen_id, patient_id)
 
+    def link_visit(self, specimen_id: str, visit_id: str) -> None:
+        """Create a COLLECTED_AT_VISIT relationship from Specimen to an existing OpdVisit node."""
+        with self._driver.session() as session:
+            session.execute_write(txs._link_specimen_opd_visit, specimen_id, visit_id)
+
 
 class SampleRepository(BaseRepository):
     """CRUD for Sample nodes."""
