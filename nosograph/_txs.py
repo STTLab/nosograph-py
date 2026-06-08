@@ -96,7 +96,7 @@ def _link_admission_ward(
     bed_no: str | None,
 ) -> None:
     tx.run(
-        CYPHERS["ASSOCIATE_Admisson_TO_Ward"],
+        CYPHERS["ASSOCIATE_Admission_TO_Ward"],
         admission_id=admission_id,
         ward_id=ward_id,
         room_no=room_no,

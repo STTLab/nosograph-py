@@ -23,7 +23,7 @@ nosograph-py/
 ├── nosograph/
 │   ├── __init__.py          ← public API exports
 │   ├── db.py                ← NosoGraph class (driver + repository properties)
-│   ├── types.py             ← Neo4JAuth, AssemblyProps, ContigProps, Stats TypedDicts
+│   ├── types.py             ← Neo4JAuth, AssemblyProps, ContigProps, NodeCreateOrMatchStats, NodeAndRelationshipCreationStats, VariantCallProps
 │   ├── pipeline.py          ← NosoGraphPipeline / NosoGraphPipelineOutput
 │   ├── cli.py               ← interactive terminal UI (prompt_toolkit)
 │   ├── _txs.py              ← private transaction functions (internal)
@@ -39,15 +39,19 @@ nosograph-py/
 │   │   ├── specimen.py      ← SpecimenRepository, SampleRepository
 │   │   ├── genomics.py      ← OrganismRepository, AssemblyRepository, ReferenceGenomeRepository
 │   │   └── clinical.py      ← WardRepository, DepartmentRepository, LabResultRepository, HIVViralLoadRepository, OpdVisitRepository
-│   └── cypher/              ← all .cypher files (loaded via importlib.resources)
+│   │   (genomics.py also defines VariantRepository)
+│   ├── cypher/              ← all .cypher files (loaded via importlib.resources)
+│   └── utils/
+│       └── vcf.py           ← parse_medaka_vcf / parse_snippy_vcf (SnpEff-annotated VCF parsers)
 └── tests/
     ├── unit/
-    │   ├── test_models.py   ← 25 tests (models only, no DB required)
-    │   ├── test_types.py    ← 17 tests (Neo4JAuth, TypedDicts)
-    │   └── test_db.py       ← 28 tests (NosoGraph, mocked driver)
+    │   ├── test_models.py       ← 33 tests (models only, no DB required)
+    │   ├── test_types.py        ← 20 tests (Neo4JAuth, TypedDicts)
+    │   ├── test_db.py           ← 28 tests (NosoGraph, mocked driver)
+    │   └── test_vcf_parser.py   ← 11 tests (Medaka/Snippy VCF parsing)
     └── integration/
         ├── conftest.py           ← testcontainers Neo4j fixture (skips if Docker unavailable)
-        └── test_repositories.py  ← 25 tests, requires Docker
+        └── test_repositories.py  ← 37 tests, requires Docker (incl. 6 VariantRepository)
 ```
 
 ---
@@ -58,7 +62,8 @@ nosograph-py/
 - **Repository pattern**: Each entity has a repository class. All repositories take a `neo4j.Driver` (via `BaseRepository`). Each method calls `session.execute_read/write` with a transaction function from `_txs.py`.
 - **Transaction functions** (`_txs.py`): return plain `dict | None` or primitives. Repositories convert to Pydantic models via `Model.model_validate(raw)`.
 - **NosoGraph** (`db.py`): extends `neo4j.GraphDatabase`, exposes all repositories as properties (`graph.patients`, `graph.assemblies`, etc.), plus back-compat `add_assembly()` / `add_contigs()` methods.
-- **Models** (Pydantic v2): field validation + cross-field `model_validator`. `Variant.variant_key` is a `@computed_field`.
+- **Models** (Pydantic v2): field validation + cross-field `model_validator`. `Variant` identity is the 6-tuple `(REF_ACC, POS, REF, ALT, hgvs_c, hgvs_p)` enforced at the Cypher/repository layer (gene-annotation-level nodes), not a computed model field.
+- **VCF import**: `utils/vcf.py` parses SnpEff-annotated Medaka and Snippy VCFs into per-annotation records; `VariantRepository.bulk_import_from_vcf()` batches them into `MERGE`d Variant nodes plus `HAS_VARIANT` relationships carrying call metadata (`VariantCallProps`).
 
 ---
 
@@ -78,7 +83,7 @@ nosograph-py/
 | Department | ✅ | ✅ | — | — | ✅ DepartmentRepository |
 | LabResult | ✅ | ✅ | ✅ | TESTED_FOR | ✅ LabResultRepository |
 | HIVViralLoad | ✅ | ✅ | ✅ | HAS_HIV_VIRAL_LOAD_RESULT | ✅ HIVViralLoadRepository |
-| Variant | ✅ (Cypher) | ✅ (Cypher) | — | — | ❌ no repository yet |
+| Variant | ✅ | ✅ | ✅ | HAS_VARIANT (Sample→Variant, carries call props) | ✅ VariantRepository (+ dual-VCF bulk import) |
 
 ---
 
@@ -90,32 +95,27 @@ All 8 bugs from the initial audit (2026-06-07) are resolved.
 
 ## What Is Still Missing
 
-- `VariantRepository` — Cypher files and transaction functions exist; repository class missing
 - Stanford HIVDR module — `sierrapy` conda env exists in the monorepo, no Python code yet
 - `cli.py` stubs: `create_sample()`, `print_sample_info()`, `load_csv()`, `pipeline_prompt()` (full form)
 - `NosoGraphPipelineOutput.check_output_files()` for Canu assembler (`NotImplementedError`)
-- `nosograph-py/utils/` is empty
 
 ---
 
 ## Recommended Next Actions
 
-### Priority 3 — Variant repository
-1. Add `VariantRepository` in `repositories/genomics.py`
-
 ### Priority 4 — HIV/Drug resistance module
-2. Implement sierrapy integration (`conda/sierrapy.yaml` in the monorepo)
-3. Add `StanfordHIVDRPrediction` Cypher + repository
-4. Add `PREDICTS_RESISTANCE_TO` relationship
+1. Implement sierrapy integration (`conda/sierrapy.yaml` in the monorepo)
+2. Add `StanfordHIVDRPrediction` Cypher + repository
+3. Add `PREDICTS_RESISTANCE_TO` relationship
 
 ### Priority 5 — CLI & ETL completion
-5. Complete `cli.py` stubs for sample and pipeline upload
-6. Implement `load_csv()` for bulk import via pandas
-7. Implement Canu output checker in `pipeline.py`
+4. Complete `cli.py` stubs for sample and pipeline upload
+5. Implement `load_csv()` for bulk import via pandas
+6. Implement Canu output checker in `pipeline.py`
 
 ### Priority 6 — Analytical queries & reporting
-8. Add `MATCH_` queries for multi-hop traversals (patient → OpdVisit/Admission → specimens → assemblies)
-9. Implement FR-07 reporting output
+7. Add `MATCH_` queries for multi-hop traversals (patient → OpdVisit/Admission → specimens → assemblies)
+8. Implement FR-07 reporting output
 
 ---
 
