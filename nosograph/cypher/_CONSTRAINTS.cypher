@@ -68,20 +68,14 @@ CREATE CONSTRAINT hiv_viral_load_id_must_be_unique IF NOT EXISTS
 FOR (vl:HIVViralLoad) REQUIRE vl.viral_load_id IS UNIQUE;
 
 // Variant
-// variant_key = REF_ACC + ":" + POS + ":" + REF + ">" + ALT
-// i.e. NC_000001.11:123456:A>G
-CREATE CONSTRAINT variant_key_must_exist IF NOT EXISTS
-FOR (variant:Variant)
-REQUIRE variant.variant_key IS NOT NULL;
-
-CREATE CONSTRAINT variant_key_must_be_unique IF NOT EXISTS
-FOR (variant:Variant)
-REQUIRE variant.variant_key IS UNIQUE;
-
-// Required component fields
+// Identity: (REF_ACC, POS, REF, ALT, hgvs_c, hgvs_p) — one node per gene-level annotation
 CREATE CONSTRAINT variant_ref_acc_must_exist IF NOT EXISTS
 FOR (variant:Variant)
 REQUIRE variant.REF_ACC IS NOT NULL;
+
+CREATE CONSTRAINT variant_pos_must_exist IF NOT EXISTS
+FOR (variant:Variant)
+REQUIRE variant.POS IS NOT NULL;
 
 CREATE CONSTRAINT variant_ref_must_exist IF NOT EXISTS
 FOR (variant:Variant)
@@ -91,6 +85,6 @@ CREATE CONSTRAINT variant_alt_must_exist IF NOT EXISTS
 FOR (variant:Variant)
 REQUIRE variant.ALT IS NOT NULL;
 
-CREATE CONSTRAINT variant_pos_must_exist IF NOT EXISTS
-FOR (variant:Variant)
-REQUIRE variant.POS IS NOT NULL;
+// Composite index for MERGE performance on the 6-property identity key
+CREATE INDEX variant_identity_idx IF NOT EXISTS
+FOR (v:Variant) ON (v.REF_ACC, v.POS, v.REF, v.ALT, v.hgvs_c, v.hgvs_p);

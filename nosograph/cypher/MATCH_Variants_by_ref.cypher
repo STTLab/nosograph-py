@@ -1,0 +1,1 @@
+MATCH (v:Variant {REF_ACC: $REF_ACC}) RETURN v

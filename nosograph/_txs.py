@@ -465,11 +465,130 @@ def _link_specimen_opd_visit(tx: ManagedTransaction, specimen_id: str, visit_id:
 # Variant
 # ---------------------------------------------------------------------------
 
-def _create_variant(tx: ManagedTransaction, **kwargs) -> str:
-    tx.run(CYPHERS["CREATE_Variant"], **kwargs)
-    return kwargs["variant_key"]
+def _create_variant(
+    tx: ManagedTransaction,
+    REF_ACC: str,
+    POS: int,
+    REF: str,
+    ALT: str,
+    hgvs_c: str = "",
+    hgvs_p: str = "",
+    CHROM: str | None = None,
+    TYPE: str | None = None,
+    EFFECT: str | None = None,
+    IMPACT: str | None = None,
+    gene_name: str | None = None,
+) -> None:
+    tx.run(
+        CYPHERS["CREATE_Variant"],
+        REF_ACC=REF_ACC,
+        POS=POS,
+        REF=REF,
+        ALT=ALT,
+        hgvs_c=hgvs_c,
+        hgvs_p=hgvs_p,
+        CHROM=CHROM,
+        TYPE=TYPE,
+        EFFECT=EFFECT,
+        IMPACT=IMPACT,
+        gene_name=gene_name,
+    )
 
 
-def _get_variant(tx: ManagedTransaction, variant_key: str) -> dict | None:
-    record = tx.run(CYPHERS["MATCH_Variant"], variant_key=variant_key).single()
+def _get_variant(
+    tx: ManagedTransaction,
+    REF_ACC: str,
+    POS: int,
+    REF: str,
+    ALT: str,
+    hgvs_c: str = "",
+    hgvs_p: str = "",
+) -> dict | None:
+    record = tx.run(
+        CYPHERS["MATCH_Variant"],
+        REF_ACC=REF_ACC,
+        POS=POS,
+        REF=REF,
+        ALT=ALT,
+        hgvs_c=hgvs_c,
+        hgvs_p=hgvs_p,
+    ).single()
     return dict(record["v"]) if record else None
+
+
+def _delete_variant(
+    tx: ManagedTransaction,
+    REF_ACC: str,
+    POS: int,
+    REF: str,
+    ALT: str,
+    hgvs_c: str = "",
+    hgvs_p: str = "",
+) -> None:
+    tx.run(
+        CYPHERS["DELETE_Variant"],
+        REF_ACC=REF_ACC,
+        POS=POS,
+        REF=REF,
+        ALT=ALT,
+        hgvs_c=hgvs_c,
+        hgvs_p=hgvs_p,
+    )
+
+
+def _link_sample_variant(
+    tx: ManagedTransaction,
+    sample_id: str,
+    REF_ACC: str,
+    POS: int,
+    REF: str,
+    ALT: str,
+    hgvs_c: str = "",
+    hgvs_p: str = "",
+    DP: int | None = None,
+    GT: str | None = None,
+    QUAL: float | None = None,
+    GQ: int | None = None,
+    AO: int | None = None,
+    RO: int | None = None,
+    FILTER: str | None = None,
+    vcf_source: str | None = None,
+) -> None:
+    tx.run(
+        CYPHERS["ASSOCIATE_Sample_HAS_VARIANT"],
+        sample_id=sample_id,
+        REF_ACC=REF_ACC,
+        POS=POS,
+        REF=REF,
+        ALT=ALT,
+        hgvs_c=hgvs_c,
+        hgvs_p=hgvs_p,
+        DP=DP,
+        GT=GT,
+        QUAL=QUAL,
+        GQ=GQ,
+        AO=AO,
+        RO=RO,
+        FILTER=FILTER,
+        vcf_source=vcf_source,
+    )
+
+
+def _bulk_merge_variants(
+    tx: ManagedTransaction, variants: list[dict]
+) -> NodeAndRelationshipCreationStats:
+    summary = tx.run(CYPHERS["BULK_MERGE_Variants"], variants=variants).consume()
+    return {
+        "nodes_created": summary.counters.nodes_created,
+        "relationships_created": summary.counters.relationships_created,
+    }
+
+
+def _get_variants_by_sample(tx: ManagedTransaction, sample_id: str) -> list[tuple[dict, dict]]:
+    records = tx.run(CYPHERS["MATCH_Variants_by_sample"], sample_id=sample_id)
+    return [(dict(r["v"]), dict(r["r"])) for r in records]
+
+
+def _get_variants_by_ref(tx: ManagedTransaction, REF_ACC: str) -> list[dict]:
+    records = tx.run(CYPHERS["MATCH_Variants_by_ref"], REF_ACC=REF_ACC)
+    return [dict(r["v"]) for r in records]

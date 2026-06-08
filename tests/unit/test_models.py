@@ -172,19 +172,33 @@ class TestContig:
 
 
 class TestVariant:
-    def test_variant_key_computed(self):
+    def test_minimal_required_fields(self):
         v = Variant(REF_ACC="NC_000001.11", POS=123456, REF="A", ALT="G")
-        assert v.variant_key == "NC_000001.11:123456:A>G"
+        assert v.REF_ACC == "NC_000001.11"
+        assert v.POS == 123456
+        assert v.hgvs_c == ""
+        assert v.hgvs_p == ""
 
-    def test_variant_key_in_model_dump(self):
-        v = Variant(REF_ACC="NC_000001.11", POS=1, REF="C", ALT="T")
-        d = v.model_dump()
-        assert d["variant_key"] == "NC_000001.11:1:C>T"
+    def test_with_annotation_fields(self):
+        v = Variant(
+            REF_ACC="K03455.1",
+            POS=2800,
+            REF="A",
+            ALT="G",
+            hgvs_c="c.480A>G",
+            hgvs_p="p.Gly160Gly",
+            gene_name="gag",
+            EFFECT="synonymous_variant",
+            IMPACT="LOW",
+        )
+        assert v.hgvs_c == "c.480A>G"
+        assert v.gene_name == "gag"
 
     def test_optional_fields_default_none(self):
         v = Variant(REF_ACC="X", POS=1, REF="A", ALT="T")
-        assert v.DP is None
         assert v.EFFECT is None
+        assert v.CHROM is None
+        assert v.gene_name is None
 
 
 # ---------------------------------------------------------------------------

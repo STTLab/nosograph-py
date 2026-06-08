@@ -1,13 +1,15 @@
 from nosograph.db import NosoGraph
-from nosograph.types import Neo4JAuth
+from nosograph.types import Neo4JAuth, VariantCallProps
 from nosograph.models.patient import Patient, Admission, Ward, Department, OpdVisit
 from nosograph.models.specimen import Specimen, Sample
 from nosograph.models.genomics import Organism, ReferenceGenome, Assembly, Contig, Variant
 from nosograph.models.lab import LabResult, HIVViralLoad
+from nosograph.repositories.genomics import VariantRepository
 
 __all__ = [
     "NosoGraph",
     "Neo4JAuth",
+    "VariantCallProps",
     "Patient",
     "Admission",
     "Ward",
@@ -20,6 +22,7 @@ __all__ = [
     "Assembly",
     "Contig",
     "Variant",
+    "VariantRepository",
     "LabResult",
     "HIVViralLoad",
 ]

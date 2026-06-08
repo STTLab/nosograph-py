@@ -5,6 +5,7 @@ from nosograph.types import (
     ContigProps,
     NodeCreateOrMatchStats,
     NodeAndRelationshipCreationStats,
+    VariantCallProps,
 )
 
 
@@ -100,3 +101,19 @@ class TestTypedDicts:
         }
         assert stats["nodes_created"] == 3
         assert stats["relationships_created"] == 2
+
+
+class TestVariantCallProps:
+    def test_medaka_call(self):
+        call: VariantCallProps = {"DP": 20, "GT": "1", "QUAL": 35.5, "GQ": 36, "vcf_source": "medaka"}
+        assert call["GQ"] == 36
+        assert call.get("AO") is None
+
+    def test_snippy_call(self):
+        call: VariantCallProps = {"DP": 20, "GT": "1/1", "QUAL": 682.6, "AO": 20, "RO": 0, "vcf_source": "snippy"}
+        assert call["AO"] == 20
+        assert call.get("GQ") is None
+
+    def test_partial_call_allowed(self):
+        call: VariantCallProps = {"GT": "1"}
+        assert call["GT"] == "1"
