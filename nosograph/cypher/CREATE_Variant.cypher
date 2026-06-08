@@ -1,16 +1,8 @@
-MERGE (v:Variant {variant_key: $variant_key})
+MERGE (v:Variant {REF_ACC: $REF_ACC, POS: $POS, REF: $REF, ALT: $ALT, hgvs_c: $hgvs_c, hgvs_p: $hgvs_p})
 ON CREATE SET
-    v.REF_ACC = $REF_ACC,
-    v.POS = $POS,
-    v.REF = $REF,
-    v.ALT = $ALT,
     v.CHROM = $CHROM,
     v.TYPE = $TYPE,
-    v.DP = $DP,
-    v.AO = $AO,
-    v.RO = $RO,
-    v.QUAL = $QUAL,
-    v.GT = $GT,
     v.EFFECT = $EFFECT,
-    v.IMPACT = $IMPACT
+    v.IMPACT = $IMPACT,
+    v.gene_name = $gene_name
 RETURN v

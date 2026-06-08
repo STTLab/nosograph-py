@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel
 
 
 class Organism(BaseModel):
@@ -39,15 +39,8 @@ class Variant(BaseModel):
     ALT: str
     CHROM: Optional[str] = None
     TYPE: Optional[str] = None
-    DP: Optional[int] = None
-    AO: Optional[int] = None
-    RO: Optional[int] = None
-    QUAL: Optional[float] = None
-    GT: Optional[str] = None
     EFFECT: Optional[str] = None
     IMPACT: Optional[str] = None
-
-    @computed_field
-    @property
-    def variant_key(self) -> str:
-        return f"{self.REF_ACC}:{self.POS}:{self.REF}>{self.ALT}"
+    hgvs_c: str = ""
+    hgvs_p: str = ""
+    gene_name: Optional[str] = None

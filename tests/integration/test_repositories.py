@@ -1,3 +1,4 @@
+import os
 from datetime import date
 import pytest
 from nosograph import (
@@ -5,7 +6,12 @@ from nosograph import (
     Specimen, Sample,
     Organism, ReferenceGenome, Assembly, Contig,
     LabResult, HIVViralLoad,
+    Variant, VariantCallProps,
 )
+
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "../../.claude/sample_files")
+HIV_VCF = os.path.join(SAMPLE_DIR, "hiv.sample_1_medaka.annotated.vcf")
+SNIPPY_VCF = os.path.join(SAMPLE_DIR, "bacterial_samples.snps.vcf")
 
 
 # ---------------------------------------------------------------------------
@@ -394,3 +400,75 @@ class TestOpdVisitRepository:
             """).single()
         assert result is not None
         assert result["val"] == "13.0"
+
+
+# ---------------------------------------------------------------------------
+# VariantRepository
+# ---------------------------------------------------------------------------
+
+class TestVariantRepository:
+    def test_create_get_delete(self, graph):
+        v = Variant(
+            REF_ACC="K03455.1",
+            POS=2800,
+            REF="A",
+            ALT="G",
+            hgvs_c="c.480A>G",
+            hgvs_p="p.Gly160Gly",
+            gene_name="gag",
+            EFFECT="synonymous_variant",
+            IMPACT="LOW",
+            TYPE="SNP",
+        )
+        graph.variants.create(v)
+        fetched = graph.variants.get("K03455.1", 2800, "A", "G", "c.480A>G", "p.Gly160Gly")
+        assert fetched is not None
+        assert fetched.gene_name == "gag"
+        assert fetched.hgvs_c == "c.480A>G"
+
+        graph.variants.delete("K03455.1", 2800, "A", "G", "c.480A>G", "p.Gly160Gly")
+        assert graph.variants.get("K03455.1", 2800, "A", "G", "c.480A>G", "p.Gly160Gly") is None
+
+    def test_get_nonexistent_returns_none(self, graph):
+        result = graph.variants.get("NONE", 1, "A", "G", "", "")
+        assert result is None
+
+    def test_link_sample_and_get_by_sample(self, graph):
+        graph.samples.create(Sample(sample_id="SVAR_01"))
+        v = Variant(REF_ACC="K03455.1", POS=3000, REF="C", ALT="T", hgvs_c="c.600C>T", hgvs_p="", gene_name="pol", TYPE="SNP")
+        graph.variants.create(v)
+        call: VariantCallProps = {"DP": 20, "GT": "1", "QUAL": 35.5, "GQ": 36, "vcf_source": "medaka"}
+        graph.variants.link_sample(v, "SVAR_01", call)
+
+        pairs = graph.variants.get_by_sample("SVAR_01")
+        assert len(pairs) == 1
+        fetched_v, fetched_c = pairs[0]
+        assert fetched_v.hgvs_c == "c.600C>T"
+        assert fetched_c["vcf_source"] == "medaka"
+        assert fetched_c["GQ"] == 36
+
+    def test_get_by_ref(self, graph):
+        v = Variant(REF_ACC="REF_TEST_01", POS=100, REF="A", ALT="T", hgvs_c="c.100A>T", hgvs_p="p.Lys34Ile", gene_name="ORF1")
+        graph.variants.create(v)
+        results = graph.variants.get_by_ref("REF_TEST_01")
+        assert any(r.hgvs_c == "c.100A>T" for r in results)
+
+    @pytest.mark.skipif(not os.path.exists(SNIPPY_VCF), reason="Snippy sample VCF not found")
+    def test_bulk_import_snippy(self, graph):
+        graph.samples.create(Sample(sample_id="SVAR_SNIPPY"))
+        stats = graph.variants.bulk_import_from_vcf(SNIPPY_VCF, "SVAR_SNIPPY", "ref_bac_001", "snippy", batch_size=50)
+        assert stats["nodes_created"] > 0
+        assert stats["relationships_created"] > 0
+        pairs = graph.variants.get_by_sample("SVAR_SNIPPY")
+        assert len(pairs) > 0
+
+    @pytest.mark.skipif(not os.path.exists(HIV_VCF), reason="HIV sample VCF not found")
+    def test_bulk_import_medaka_hiv(self, graph):
+        graph.samples.create(Sample(sample_id="SVAR_HIV"))
+        stats = graph.variants.bulk_import_from_vcf(HIV_VCF, "SVAR_HIV", "K03455.1", "medaka", batch_size=100)
+        assert stats["nodes_created"] > 0
+        pairs = graph.variants.get_by_sample("SVAR_HIV")
+        pos_counts: dict[int, int] = {}
+        for v, _ in pairs:
+            pos_counts[v.POS] = pos_counts.get(v.POS, 0) + 1
+        assert max(pos_counts.values()) > 1, "HIV overlapping ORFs should produce multiple Variant nodes per position"

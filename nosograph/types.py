@@ -43,3 +43,14 @@ class NodeCreateOrMatchStats(TypedDict):
 class NodeAndRelationshipCreationStats(TypedDict):
     nodes_created: int
     relationships_created: int
+
+
+class VariantCallProps(TypedDict, total=False):
+    DP: int | None
+    GT: str | None
+    QUAL: float | None
+    GQ: int | None
+    AO: int | None
+    RO: int | None
+    FILTER: str | None
+    vcf_source: str | None
