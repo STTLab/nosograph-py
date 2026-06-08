@@ -284,14 +284,23 @@ class VariantRepository(BaseRepository):
         else:
             records = parse_snippy_vcf(vcf_path, ref_accession, sample_id)
 
+        with self._driver.session() as session:
+            exists = session.execute_read(
+                lambda tx: tx.run(
+                    "MATCH (s:Sample {sample_id: $id}) RETURN s LIMIT 1", id=sample_id
+                ).single()
+            )
+        if exists is None:
+            raise ValueError(f"Sample '{sample_id}' not found")
+
         total_nodes = 0
         total_rels = 0
 
-        for i in range(0, len(records), batch_size):
-            batch = records[i : i + batch_size]
-            with self._driver.session() as session:
+        with self._driver.session() as session:
+            for i in range(0, len(records), batch_size):
+                batch = records[i : i + batch_size]
                 stats = session.execute_write(txs._bulk_merge_variants, batch)
-            total_nodes += stats["nodes_created"]
-            total_rels += stats["relationships_created"]
+                total_nodes += stats["nodes_created"]
+                total_rels += stats["relationships_created"]
 
         return {"nodes_created": total_nodes, "relationships_created": total_rels}

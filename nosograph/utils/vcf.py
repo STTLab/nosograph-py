@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-_IMPACT_RANK = {"HIGH": 0, "MODERATE": 1, "LOW": 2, "MODIFIER": 3}
+
+def _to_int(val: str | None) -> int | None:
+    if val is None or val == ".":
+        return None
+    try:
+        return int(val)
+    except ValueError:
+        return None
 
 
 def _parse_ann(ann_str: str) -> list[dict]:
@@ -76,10 +83,10 @@ def parse_medaka_vcf(vcf_path: str, ref_accession: str, sample_id: str) -> list[
                 "ALT": alt,
                 "TYPE": info.get("TYPE"),
                 "sample_id": sample_id,
-                "DP": int(info["DP"]) if "DP" in info else None,
+                "DP": _to_int(info.get("DP")),
                 "GT": fmt.get("GT"),
                 "QUAL": float(qual_str) if qual_str not in (".", "") else None,
-                "GQ": int(fmt["GQ"]) if "GQ" in fmt else None,
+                "GQ": _to_int(fmt.get("GQ")),
                 "AO": None,
                 "RO": None,
                 "FILTER": flt if flt != "." else None,
@@ -140,12 +147,12 @@ def parse_snippy_vcf(vcf_path: str, ref_accession: str, sample_id: str) -> list[
                 "ALT": alt,
                 "TYPE": info.get("TYPE"),
                 "sample_id": sample_id,
-                "DP": int(dp_raw) if dp_raw else None,
+                "DP": _to_int(dp_raw),
                 "GT": fmt.get("GT"),
                 "QUAL": float(qual_str) if qual_str not in (".", "") else None,
                 "GQ": None,
-                "AO": int(ao_raw) if ao_raw else None,
-                "RO": int(ro_raw) if ro_raw else None,
+                "AO": _to_int(ao_raw),
+                "RO": _to_int(ro_raw),
                 "FILTER": flt if flt != "." else None,
                 "vcf_source": "snippy",
             }
