@@ -85,6 +85,10 @@ CREATE CONSTRAINT variant_alt_must_exist IF NOT EXISTS
 FOR (variant:Variant)
 REQUIRE variant.ALT IS NOT NULL;
 
-// Composite index for MERGE performance on the 6-property identity key
-CREATE INDEX variant_identity_idx IF NOT EXISTS
-FOR (v:Variant) ON (v.REF_ACC, v.POS, v.REF, v.ALT, v.hgvs_c, v.hgvs_p);
+// NODE KEY enforces uniqueness + NOT NULL on the composite identity key.
+// This prevents duplicate Variant nodes under concurrent MERGE.
+// Enterprise edition required; Community edition can only approximate this
+// with separate existence + uniqueness constraints per property.
+CREATE CONSTRAINT variant_identity_key IF NOT EXISTS
+FOR (v:Variant)
+REQUIRE (v.REF_ACC, v.POS, v.REF, v.ALT, v.hgvs_c, v.hgvs_p) IS NODE KEY;
