@@ -124,6 +124,9 @@ class NosoGraphPipelineOutputFiles(TypedDict):
 class NosoGraphPipelineOutput:
     ASSEMBLY_OUTPUT_DIR = '01_assembly'
     POLISH_OUTPUT_DIR = '02_polish'
+    # Canu is invoked by the bash pipeline with `-p assembly`, so every output
+    # file is prefixed `assembly.` (see nosograph_pipeline.sh).
+    CANU_PREFIX = 'assembly'
 
     def __init__(self, assembler: Literal['canu', 'flye'], outdir: os.PathLike):
         self.assembler = assembler
@@ -142,10 +145,25 @@ class NosoGraphPipelineOutput:
             checked.append(dir_exists)
         return all(checked)
 
+    def _check_files(self, expecting: set[str]) -> bool:
+        checked = []
+        for expect in expecting:
+            file_exists = os.path.isfile(os.path.join(str(self.outdir), self.ASSEMBLY_OUTPUT_DIR, expect))
+            self._logger.info(f'{expect:.<30}: {GREEN if file_exists else RED + "Not "}Found{RESET}')
+            checked.append(file_exists)
+        return all(checked)
+
     def check_output_files(self) -> bool:
         match self.assembler:
             case 'canu':
-                raise NotImplementedError("Output check for canu not yet implemented")
+                p = self.CANU_PREFIX
+                expecting = {
+                    f'{p}.contigs.fasta',
+                    f'{p}.unitigs.fasta',
+                    f'{p}.unassembled.fasta',
+                    f'{p}.report',
+                }
+                return self._check_files(expecting)
             case 'flye':
                 expecting = {
                     'assembly.contigs.fasta',
@@ -155,9 +173,4 @@ class NosoGraphPipelineOutput:
                     'flye.log',
                     'params.json'
                 }
-                checked = []
-                for expect in expecting:
-                    file_exists = os.path.isfile(os.path.join(str(self.outdir), self.ASSEMBLY_OUTPUT_DIR, expect))
-                    self._logger.info(f'{expect:.<30}: {GREEN if file_exists else RED + "Not "}Found{RESET}')
-                    checked.append(file_exists)
-                return all(checked)
+                return self._check_files(expecting)

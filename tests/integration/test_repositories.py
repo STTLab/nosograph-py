@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date
 import pytest
@@ -7,11 +8,43 @@ from nosograph import (
     Organism, ReferenceGenome, Assembly, Contig,
     LabResult, HIVViralLoad,
     Variant, VariantCallProps,
+    DrugClass, Drug, Mutation, StanfordHIVDRPrediction,
 )
+
+
+SIERRA_REPORT = [
+    {
+        "inputSequence": {"header": "seq1"},
+        "drugResistance": [
+            {
+                "gene": {"name": "RT"},
+                "drugScores": [
+                    {
+                        "drugClass": {"name": "NRTI"},
+                        "drug": {"name": "ABC", "displayAbbr": "ABC", "fullName": "abacavir"},
+                        "score": 15.0,
+                        "text": "Low-Level Resistance",
+                        "partialScores": [{"mutations": [{"text": "M184V"}], "score": 15.0}],
+                    },
+                    {
+                        "drugClass": {"name": "NNRTI"},
+                        "drug": {"name": "EFV", "displayAbbr": "EFV", "fullName": "efavirenz"},
+                        "score": 0.0,
+                        "text": "Susceptible",
+                        "partialScores": [],
+                    },
+                ],
+            }
+        ],
+    }
+]
 
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "../../.claude/sample_files")
 HIV_VCF = os.path.join(SAMPLE_DIR, "hiv.sample_1_medaka.annotated.vcf")
 SNIPPY_VCF = os.path.join(SAMPLE_DIR, "bacterial_samples.snps.vcf")
+# Gzipped per-reference subsets cut from real HIV-64148 pipeline output.
+HXB2_GZ = os.path.join(SAMPLE_DIR, "hiv64148_HXB2_subset.medaka.annotated.vcf.gz")
+CRF01_AE_GZ = os.path.join(SAMPLE_DIR, "hiv64148_CRF01_AE_subset.medaka.annotated.vcf.gz")
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +164,17 @@ class TestSampleRepository:
         with graph.driver.session() as s:
             result = s.run(
                 "MATCH (s:Sample {sample_id:'SAM002'})-[:HAS_ASSEMBLY]->(a:Assembly {assembly_id:'ASM001'}) RETURN a"
+            ).single()
+        assert result is not None
+
+    def test_link_specimen(self, graph):
+        graph.samples.create(Sample(sample_id="SAM003"))
+        graph.specimens.create(Specimen(specimen_id="SP_SAM"))
+        graph.samples.link_specimen("SAM003", "SP_SAM")
+
+        with graph.driver.session() as s:
+            result = s.run(
+                "MATCH (sa:Sample {sample_id:'SAM003'})-[:DERIVED_FROM]->(sp:Specimen {specimen_id:'SP_SAM'}) RETURN sp"
             ).single()
         assert result is not None
 
@@ -472,3 +516,206 @@ class TestVariantRepository:
         for v, _ in pairs:
             pos_counts[v.POS] = pos_counts.get(v.POS, 0) + 1
         assert max(pos_counts.values()) > 1, "HIV overlapping ORFs should produce multiple Variant nodes per position"
+
+
+# ---------------------------------------------------------------------------
+# AnalyticsRepository (cross-domain multi-hop traversals)
+# ---------------------------------------------------------------------------
+
+class TestAnalyticsRepository:
+    def _seed_patient_chain(self, graph, *, pid, spid, said, variant, call, ward_id=None, adm_id=None):
+        """Patient <- Specimen <- Sample -> Variant, optionally admitted to a ward."""
+        graph.patients.create(Patient(patient_id=pid, firstname="x", lastname="y", age=40))
+        graph.specimens.create(Specimen(specimen_id=spid, specimen_type="plasma"))
+        graph.specimens.link_patient(spid, pid)
+        graph.samples.create(Sample(sample_id=said))
+        graph.samples.link_specimen(said, spid)
+        graph.variants.link_sample(variant, said, call)
+        if ward_id and adm_id:
+            graph.admissions.create(Admission(admission_id=adm_id))
+            graph.patients.link_admission(pid, adm_id)
+            graph.admissions.link_ward(adm_id, ward_id, room_no="1", bed_no="A")
+
+    def test_patient_variants(self, graph):
+        v = Variant(REF_ACC="K03455.1", POS=2800, REF="A", ALT="G",
+                    hgvs_c="c.1A>G", hgvs_p="", gene_name="gag", TYPE="SNP")
+        graph.variants.create(v)
+        self._seed_patient_chain(
+            graph, pid="PA1", spid="SPA1", said="SAA1", variant=v,
+            call={"DP": 30, "vcf_source": "medaka"},
+        )
+
+        rows = graph.analytics.patient_variants("PA1")
+        assert len(rows) == 1
+        assert rows[0].specimen_id == "SPA1"
+        assert rows[0].sample_id == "SAA1"
+        assert rows[0].variant.gene_name == "gag"
+        assert rows[0].call["DP"] == 30
+
+    def test_patient_variants_empty_for_unknown(self, graph):
+        assert graph.analytics.patient_variants("NOPE") == []
+
+    def test_ward_variant_clusters(self, graph):
+        graph.departments.create(Department(department_id="D1", name="Medicine"))
+        graph.wards.create(Ward(ward_id="W1", name="ICU", department_id="D1"))
+        shared = Variant(REF_ACC="K03455.1", POS=5000, REF="C", ALT="T",
+                         hgvs_c="c.9C>T", hgvs_p="", gene_name="pol", TYPE="SNP")
+        graph.variants.create(shared)
+
+        self._seed_patient_chain(graph, pid="PW1", spid="SPW1", said="SAW1",
+                                 variant=shared, call={"vcf_source": "medaka"},
+                                 ward_id="W1", adm_id="ADW1")
+        self._seed_patient_chain(graph, pid="PW2", spid="SPW2", said="SAW2",
+                                 variant=shared, call={"vcf_source": "medaka"},
+                                 ward_id="W1", adm_id="ADW2")
+
+        clusters = graph.analytics.ward_variant_clusters(min_patients=2)
+        assert len(clusters) == 1
+        c = clusters[0]
+        assert c.ward_id == "W1"
+        assert c.ward_name == "ICU"
+        assert c.patient_count == 2
+        assert set(c.patient_ids) == {"PW1", "PW2"}
+        assert c.variant.POS == 5000
+
+        # Raising the threshold above the cluster size excludes it.
+        assert graph.analytics.ward_variant_clusters(min_patients=3) == []
+
+    def test_ward_variant_clusters_rejects_zero(self, graph):
+        with pytest.raises(ValueError, match="min_patients"):
+            graph.analytics.ward_variant_clusters(min_patients=0)
+
+
+# ---------------------------------------------------------------------------
+# DrugResistanceRepository (Stanford HIVdb)
+# ---------------------------------------------------------------------------
+
+class TestDrugResistanceRepository:
+    def test_mutation_crud(self, graph):
+        graph.resistance.create_mutation(Mutation(gene="RT", text="M184V", primary_type="NRTI"))
+        fetched = graph.resistance.get_mutation("RT", "M184V")
+        assert fetched is not None
+        assert fetched.primary_type == "NRTI"
+        graph.resistance.delete_mutation("RT", "M184V")
+        assert graph.resistance.get_mutation("RT", "M184V") is None
+
+    def test_drug_and_class_crud(self, graph):
+        graph.resistance.create_drug_class(DrugClass(name="NRTI", full_name="Nucleoside RT Inhibitor"))
+        graph.resistance.create_drug(Drug(name="ABC", full_name="abacavir", display_abbr="ABC"))
+        assert graph.resistance.get_drug_class("NRTI").full_name == "Nucleoside RT Inhibitor"
+        assert graph.resistance.get_drug("ABC").full_name == "abacavir"
+
+    def test_prediction_crud(self, graph):
+        graph.resistance.create_prediction(StanfordHIVDRPrediction(
+            prediction_id="S1:RT:ABC", sample_id="S1", gene="RT",
+            drug_name="ABC", score=15.0, level="Low-Level Resistance",
+        ))
+        fetched = graph.resistance.get_prediction("S1:RT:ABC")
+        assert fetched is not None
+        assert fetched.score == 15.0
+        graph.resistance.delete_prediction("S1:RT:ABC")
+        assert graph.resistance.get_prediction("S1:RT:ABC") is None
+
+    def test_bulk_import_missing_sample_raises(self, graph, tmp_path):
+        p = tmp_path / "sierra.json"
+        p.write_text(json.dumps(SIERRA_REPORT), encoding="utf-8")
+        with pytest.raises(ValueError, match="not found"):
+            graph.resistance.bulk_import_from_sierra(str(p), "NO_SUCH_SAMPLE")
+
+    def test_bulk_import_and_reads(self, graph, tmp_path):
+        graph.samples.create(Sample(sample_id="HIV_S1"))
+        p = tmp_path / "sierra.json"
+        p.write_text(json.dumps(SIERRA_REPORT), encoding="utf-8")
+
+        stats = graph.resistance.bulk_import_from_sierra(str(p), "HIV_S1")
+        assert stats["nodes_created"] > 0
+        assert stats["relationships_created"] > 0
+
+        # Two predictions (ABC, EFV) linked to the sample.
+        predictions = graph.resistance.get_resistance_by_sample("HIV_S1")
+        by_drug = {pred.drug_name: (pred, cls) for pred, cls in predictions}
+        assert set(by_drug) == {"ABC", "EFV"}
+        abc_pred, abc_class = by_drug["ABC"]
+        assert abc_pred.level == "Low-Level Resistance"
+        assert abc_pred.score == 15.0
+        assert abc_class == "NRTI"
+
+        # M184V confers resistance to ABC (score on the edge); EFV had no mutations.
+        muts = graph.resistance.get_mutations_for_drug("ABC")
+        assert [(m.text, s) for m, s in muts] == [("M184V", 15.0)]
+        assert graph.resistance.get_mutations_for_drug("EFV") == []
+
+    def test_bulk_import_is_idempotent(self, graph, tmp_path):
+        graph.samples.create(Sample(sample_id="HIV_S2"))
+        p = tmp_path / "sierra.json"
+        p.write_text(json.dumps(SIERRA_REPORT), encoding="utf-8")
+        graph.resistance.bulk_import_from_sierra(str(p), "HIV_S2")
+        graph.resistance.bulk_import_from_sierra(str(p), "HIV_S2")  # second import
+
+        # Re-import must not duplicate predictions.
+        assert len(graph.resistance.get_resistance_by_sample("HIV_S2")) == 2
+
+    def test_get_resistance_empty_for_unknown(self, graph):
+        assert graph.resistance.get_resistance_by_sample("NOPE") == []
+
+
+# ---------------------------------------------------------------------------
+# Gzipped VCF import — functional, end-to-end against real HIV-64148 data
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(
+    not (os.path.exists(HXB2_GZ) and os.path.exists(CRF01_AE_GZ)),
+    reason="HIV-64148 gzipped VCF fixtures not found",
+)
+class TestVcfGzipImportFunctional:
+    def test_bulk_import_gzipped_medaka(self, graph):
+        graph.samples.create(Sample(sample_id="GZ_S1"))
+        stats = graph.variants.bulk_import_from_vcf(HXB2_GZ, "GZ_S1", "K03455.1", "medaka")
+        assert stats["nodes_created"] > 0
+        assert stats["relationships_created"] > 0
+
+        pairs = graph.variants.get_by_sample("GZ_S1")
+        assert len(pairs) > 0
+        # Gene-annotation-level design survives the full gz → graph path.
+        pos_counts: dict[int, int] = {}
+        for v, _ in pairs:
+            pos_counts[v.POS] = pos_counts.get(v.POS, 0) + 1
+        assert max(pos_counts.values()) > 1
+
+        by_ref = graph.variants.get_by_ref("K03455.1")
+        assert len(by_ref) > 0
+        assert all(v.REF_ACC == "K03455.1" for v in by_ref)
+
+    def test_per_reference_gzip_import(self, graph):
+        # The spec emits one annotated VCF per reference; importing both under
+        # their own accessions must keep the variant sets cleanly separated.
+        graph.samples.create(Sample(sample_id="GZ_TWO"))
+        graph.variants.bulk_import_from_vcf(HXB2_GZ, "GZ_TWO", "K03455.1", "medaka")
+        graph.variants.bulk_import_from_vcf(CRF01_AE_GZ, "GZ_TWO", "AF164485.1", "medaka")
+
+        hxb2 = graph.variants.get_by_ref("K03455.1")
+        crf = graph.variants.get_by_ref("AF164485.1")
+        assert len(hxb2) > 0 and len(crf) > 0
+        assert all(v.REF_ACC == "K03455.1" for v in hxb2)
+        assert all(v.REF_ACC == "AF164485.1" for v in crf)
+
+        # The sample links to the union of both references' variants, no overlap.
+        pairs = graph.variants.get_by_sample("GZ_TWO")
+        assert {v.REF_ACC for v, _ in pairs} == {"K03455.1", "AF164485.1"}
+        assert len(pairs) == len(hxb2) + len(crf)
+
+    def test_gzip_matches_plaintext(self, graph, tmp_path):
+        # Importing a gz file and its decompressed twin must yield identical graphs.
+        import gzip as _gzip
+        plain = tmp_path / "hxb2.vcf"
+        with _gzip.open(HXB2_GZ, "rb") as src:
+            plain.write_bytes(src.read())
+
+        graph.samples.create(Sample(sample_id="GZ_A"))
+        graph.samples.create(Sample(sample_id="GZ_B"))
+        graph.variants.bulk_import_from_vcf(HXB2_GZ, "GZ_A", "K03455.1", "medaka")
+        graph.variants.bulk_import_from_vcf(str(plain), "GZ_B", "K03455.1", "medaka")
+
+        a = sorted((v.POS, v.REF, v.ALT, v.hgvs_c, v.hgvs_p) for v, _ in graph.variants.get_by_sample("GZ_A"))
+        b = sorted((v.POS, v.REF, v.ALT, v.hgvs_c, v.hgvs_p) for v, _ in graph.variants.get_by_sample("GZ_B"))
+        assert a == b and len(a) > 0
