@@ -59,6 +59,105 @@ for pv in graph.analytics.patient_variants("P001"):
 clusters = graph.analytics.ward_variant_clusters(min_patients=2)  # outbreak signal
 ```
 
+## Use case: ingest a full pipeline run
+
+The HIV drug-resistance pipeline writes **one directory per sequenced sample**,
+named by the sample ID. Only two artifacts are imported into the graph — the
+per-reference annotated VCFs and the sierrapy report:
+
+```
+<SID>/                                  # directory named by the sample ID
+├── sierrapy_result.0.json              # Stanford HIVdb drug-resistance predictions
+└── 05_medaka_variant/
+    ├── <REF>/                          # one subdir per reference (e.g. HXB2, CRF01_AE)
+    │   └── medaka.annotated.vcf.gz     # SnpEff-annotated variants vs that reference
+    └── <REF>/
+        └── medaka.annotated.vcf.gz
+```
+
+The other directories (assembly, polishing, QC, BLAST, reports) are for human
+review and are not imported.
+
+### 1. Load one sample directory
+
+`bulk_import_from_vcf` reads `.vcf.gz` transparently and is called **once per
+reference**; the reference subdir name maps to the accession stored on
+`Variant.REF_ACC`. The sample ID is taken from the directory name.
+
+```python
+import os, glob
+from nosograph import NosoGraph, Neo4JAuth, Patient, Specimen, Sample
+
+# Map each 05_medaka_variant/<REF>/ subdir name to its reference accession.
+REFERENCE_ACCESSIONS = {
+    "HXB2": "K03455.1",
+    "CRF01_AE": "AF164485.1",
+}
+
+def ingest_sample(graph, sample_dir, patient_id):
+    """Load one pipeline output directory and link it to an existing patient."""
+    sample_id = os.path.basename(os.path.normpath(sample_dir))   # the <SID> dir name
+
+    # Clinical provenance: Patient <- Specimen <- Sample
+    specimen_id = f"{sample_id}_SPECIMEN"
+    graph.specimens.create(Specimen(specimen_id=specimen_id))
+    graph.specimens.link_patient(specimen_id, patient_id)
+    graph.samples.create(Sample(sample_id=sample_id))
+    graph.samples.link_specimen(sample_id, specimen_id)
+
+    # Variants — one annotated VCF per reference
+    for ref_dir in sorted(glob.glob(os.path.join(sample_dir, "05_medaka_variant", "*"))):
+        accession = REFERENCE_ACCESSIONS.get(os.path.basename(ref_dir))
+        if accession is None:
+            continue   # unknown reference — add it to REFERENCE_ACCESSIONS
+        vcf = os.path.join(ref_dir, "medaka.annotated.vcf.gz")
+        graph.variants.bulk_import_from_vcf(vcf, sample_id, accession, source="medaka")
+
+    # Drug resistance — Stanford HIVdb / sierrapy report
+    sierra = os.path.join(sample_dir, "sierrapy_result.0.json")
+    if os.path.exists(sierra):
+        graph.resistance.bulk_import_from_sierra(sierra, sample_id)
+
+    return sample_id
+
+
+auth = Neo4JAuth.from_string("neo4j/yourpassword")
+with NosoGraph("bolt://localhost:7687", auth=auth) as graph:
+    # The patient comes from your clinical / LIS data and must exist first.
+    graph.patients.create(Patient(patient_id="PATIENT_ID", firstname="...", lastname="...", age=40))
+
+    sample_id = ingest_sample(graph, sample_dir="path/to/<SID>", patient_id="PATIENT_ID")
+```
+
+### 2. Answer questions for that sample
+
+```python
+# Drug-resistance interpretation (one row per gene/drug)
+for prediction, drug_class in graph.resistance.get_resistance_by_sample(sample_id):
+    print(prediction.gene, prediction.drug_name, drug_class, prediction.level, prediction.score)
+
+# Mutations driving resistance to a given drug
+for mutation, score in graph.resistance.get_mutations_for_drug("ABC"):
+    print(mutation.gene, mutation.text, score)
+
+# Every variant observed for the patient, with sequencing provenance
+for pv in graph.analytics.patient_variants("PATIENT_ID"):
+    print(pv.sample_id, pv.variant.REF_ACC, pv.variant.gene_name, pv.variant.hgvs_p)
+```
+
+### 3. Surveillance across many runs
+
+Call `ingest_sample(...)` for each new pipeline directory, and load your
+ward/admission data (`graph.departments`, `graph.wards`, `graph.admissions`).
+Once patients are tied to wards, variants shared across patients on the same
+ward flag possible transmission:
+
+```python
+# Variants carried by >= N distinct patients admitted to the same ward
+for cluster in graph.analytics.ward_variant_clusters(min_patients=2):
+    print(cluster.ward_id, cluster.variant.hgvs_p, cluster.patient_count, cluster.patient_ids)
+```
+
 ## Entities and repositories
 
 | Entity | Repository | Notes |
