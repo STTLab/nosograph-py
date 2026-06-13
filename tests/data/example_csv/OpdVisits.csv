@@ -1,0 +1,5 @@
+patient_id,visit_id,visit_date,clinic,chief_complaint,notes
+P005,V001,2025-01-12,HIV Clinic,Routine HIV follow-up,Baseline viral load requested
+P005,V002,2025-04-15,HIV Clinic,HIV follow-up,Repeat viral load after ART
+P002,V003,2025-02-20,Internal Medicine,Persistent fever,Blood culture ordered
+P003,V004,2025-03-02,Respiratory Clinic,Productive cough,Sputum sample collected

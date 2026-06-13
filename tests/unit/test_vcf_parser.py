@@ -1,10 +1,17 @@
+import gzip
 import os
 import pytest
 from nosograph.utils.vcf import _parse_ann, parse_medaka_vcf, parse_snippy_vcf
 
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "../../.claude/sample_files")
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 HIV_VCF = os.path.join(SAMPLE_DIR, "hiv.sample_1_medaka.annotated.vcf")
 SNIPPY_VCF = os.path.join(SAMPLE_DIR, "bacterial_samples.snps.vcf")
+
+# Gzipped per-reference subsets cut from the real HIV-64148 pipeline output
+# (05_medaka_variant/<REF>/medaka.annotated.vcf.gz). (accession, path) pairs.
+HXB2_GZ = os.path.join(SAMPLE_DIR, "hiv64148_HXB2_subset.medaka.annotated.vcf.gz")
+CRF01_AE_GZ = os.path.join(SAMPLE_DIR, "hiv64148_CRF01_AE_subset.medaka.annotated.vcf.gz")
+GZ_FIXTURES = [("K03455.1", HXB2_GZ), ("AF164485.1", CRF01_AE_GZ)]
 
 
 class TestParseAnn:
@@ -62,6 +69,50 @@ class TestMedakaParser:
         r = records[0]
         assert r.get("GQ") is not None
         assert r.get("AO") is None
+
+    def test_parses_gzipped_vcf(self, tmp_path):
+        # The HIV-64148 pipeline emits per-reference VCFs as .vcf.gz; parsing a
+        # gzipped file must yield the same records as the uncompressed input.
+        gz = tmp_path / "hiv.vcf.gz"
+        with open(HIV_VCF, "rb") as src, gzip.open(gz, "wb") as dst:
+            dst.write(src.read())
+        assert parse_medaka_vcf(str(gz), "K03455.1", "S001") == \
+            parse_medaka_vcf(HIV_VCF, "K03455.1", "S001")
+
+
+@pytest.mark.parametrize("ref_acc,path", GZ_FIXTURES)
+class TestGzippedMedakaFixtures:
+    """Functional parse checks against real gzipped HIV-64148 per-reference VCFs."""
+
+    def test_parses_to_records(self, ref_acc, path):
+        records = parse_medaka_vcf(path, ref_acc, "03D1")
+        assert isinstance(records, list)
+        assert len(records) > 0
+
+    def test_ref_acc_and_source_passthrough(self, ref_acc, path):
+        records = parse_medaka_vcf(path, ref_acc, "03D1")
+        assert all(r["REF_ACC"] == ref_acc for r in records)
+        assert all(r["vcf_source"] == "medaka" for r in records)
+        assert all(r["sample_id"] == "03D1" for r in records)
+
+    def test_all_variant_types_present(self, ref_acc, path):
+        records = parse_medaka_vcf(path, ref_acc, "03D1")
+        assert {r["TYPE"] for r in records} == {"SNP", "MNP", "INDEL", "OTHER"}
+
+    def test_multiple_annotations_per_position(self, ref_acc, path):
+        # Gene-annotation-level design: a row with several SnpEff ANN entries
+        # yields several records sharing one POS — must survive gzip decoding.
+        records = parse_medaka_vcf(path, ref_acc, "03D1")
+        pos_counts: dict[int, int] = {}
+        for r in records:
+            pos_counts[r["POS"]] = pos_counts.get(r["POS"], 0) + 1
+        assert max(pos_counts.values()) > 1
+
+    def test_annotation_and_format_fields_populated(self, ref_acc, path):
+        records = parse_medaka_vcf(path, ref_acc, "03D1")
+        assert all(r["gene_name"] and r["EFFECT"] and r["IMPACT"] for r in records)
+        assert all("hgvs_c" in r and "hgvs_p" in r for r in records)
+        assert any(r.get("GQ") is not None for r in records)  # FORMAT=GT:GQ
 
 
 @pytest.mark.skipif(not os.path.exists(SNIPPY_VCF), reason="Snippy sample VCF not found")

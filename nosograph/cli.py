@@ -6,6 +6,8 @@ from prompt_toolkit import prompt
 from prompt_toolkit.completion import PathCompleter
 import nosograph._txs as txs
 from nosograph.db import NosoGraph
+from nosograph.models.specimen import Sample
+from nosograph.pipeline import NosoGraphPipeline
 from nosograph.types import Neo4JAuth
 
 dotenv.load_dotenv('.env')
@@ -151,13 +153,27 @@ class NosoGraphCLI:
                 return
 
     def create_sample(self):
-        pass
+        sample_id = input('Sample ID: ').strip()
+        if not sample_id:
+            raise ValueError("Sample ID cannot be empty")
+        if self.neo4j_conn.samples.get(sample_id) is not None:
+            raise ValueError(f"Sample with ID '{sample_id}' already exists")
+        self.neo4j_conn.samples.create(Sample(sample_id=sample_id))
+        self.neo4j_conn._logger.info(f"Created sample {sample_id}")
+        print("Sample created successfully")
 
     def get_sample(self, sample_id):
-        pass
+        return self.neo4j_conn.samples.get(sample_id)
 
     def print_sample_info(self, sample_info):
-        pass
+        if not sample_info:
+            print('Not found\n')
+            sleep(1)
+            return
+        print(f'Sample ID: {sample_info.sample_id}')
+        variants = self.neo4j_conn.variants.get_by_sample(sample_info.sample_id)
+        print(f'Linked variants: {len(variants)}\n')
+        sleep(2)
 
     def assembly_pipeline_menu(self):
         select = self.selection_menu('Assembly Pipeline', ['Run pipeline', 'Upload data to knowledge graph', '<-- Back'])
@@ -172,10 +188,41 @@ class NosoGraphCLI:
             case 3:
                 return
 
-    @staticmethod
-    def pipeline_prompt():
-        print('Path to Long reads FASTQ (gzipped or not)')
-        prompt('> ', completer=PathCompleter())
+    def pipeline_prompt(self):
+        def _path(label: str) -> str:
+            print(label)
+            return prompt('> ', completer=PathCompleter()).strip()
+
+        script_path = _path('Path to assembly pipeline script (nosograph_pipeline.sh)')
+        long_reads = _path('Path to Long reads FASTQ (gzipped or not)')
+        short_r1 = _path('Path to Short reads R1 FASTQ')
+        short_r2 = _path('Path to Short reads R2 FASTQ')
+
+        assembler = ['flye', 'canu'][self.selection_menu('Assembler', ['flye', 'canu']) - 1]
+        technology = ['nanopore', 'pacbio'][self.selection_menu('Sequencing technology', ['nanopore', 'pacbio']) - 1]
+
+        genome_size = None
+        if assembler == 'canu':
+            genome_size = input('Genome size (e.g. 5m) [required for canu]: ').strip() or None
+
+        outdir = _path('Output directory')
+        threads_input = input('Threads [1]: ').strip()
+        threads = int(threads_input) if threads_input else 1
+
+        pipeline = NosoGraphPipeline(
+            script_path=script_path,
+            long_reads=long_reads,
+            short_r1=short_r1,
+            short_r2=short_r2,
+            assembler=assembler,
+            technology=technology,
+            outdir=outdir,
+            genome_size=genome_size,
+            threads=threads,
+        )
+        print('Running pipeline...')
+        pipeline.run()
+        print('Pipeline finished')
 
 
 if __name__ == '__main__':

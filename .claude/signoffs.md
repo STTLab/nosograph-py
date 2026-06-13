@@ -24,6 +24,33 @@ Action: < Prompt/Read/Plan/Edit >
 ...
 ---
 
+## 2026-06-13
+
+Action: Plan + Edit
+
+> Implement FR-05 (drug resistance), FR-03 (analytical queries), and finish half-built surfaces (Canu output check, CLI sample/pipeline stubs). All with tests.
+
+### Major changes
+    - **Drug resistance module (FR-05)**: `models/resistance.py` (DrugClass, Drug, Mutation, StanfordHIVDRPrediction), `utils/sierra.py` (Stanford HIVdb/sierrapy JSON parser), `repositories/resistance.py` (`DrugResistanceRepository` with CRUD + `bulk_import_from_sierra`), 13 new Cypher files incl. `BULK_MERGE_HIVDR` (builds PREDICTS_RESISTANCE_TO / CONFERS_RESISTANCE_TO / IN_DRUG_CLASS / HAS_STANFORD_HIVDR_PREDICTION), constraints for the 4 node types.
+    - **Analytical queries (FR-03)**: `repositories/analytics.py` (`AnalyticsRepository`) with `patient_variants()` and `ward_variant_clusters()`; new Cypher `MATCH_patient_variants`, `MATCH_ward_variant_clusters`.
+    - **Schema fix (enables FR-03/FR-06)**: added the missing `Sample-[:DERIVED_FROM]->Specimen` edge (`SampleRepository.link_specimen`, `ASSOCIATE_Sample_DERIVED_FROM_Specimen.cypher`) — the data carried a `specimen_id` FK with no relationship, breaking patient→variant traversal.
+    - **Pipeline (P4)**: implemented `NosoGraphPipelineOutput.check_output_files()` for Canu (was `NotImplementedError`); factored shared file-check loop.
+    - **CLI (P4)**: implemented `create_sample()`, `get_sample()`, `print_sample_info()`, and the full `pipeline_prompt()` form (was `pass`/discard stubs).
+
+### Minor improvements
+    - `db.py`/`__init__.py`: exposed `graph.analytics`, `graph.resistance`; exported new models + repositories.
+    - Docs: synced `nosograph-py/.claude/CLAUDE.md`, monorepo FR table, and `example/csv/README.md` (Sample→Specimen edge now exists).
+
+### Summary
+
+168 tests pass (119 unit + 49 integration). New unit files: `test_pipeline.py`, `test_cli.py`, `test_analytics.py`, `test_sierra_parser.py`. New integration coverage: `TestAnalyticsRepository`, `TestDrugResistanceRepository`, `test_link_specimen`. The HIVDR bulk import uses a single `MERGE`+`FOREACH` Cypher and is idempotent (prediction id = `{sample_id}:{gene}:{drug_name}`).
+
+### Suggestion/Further action
+
+Next: CSV ETL (`cli.load_csv()` via pandas) for FR-01; automate the upstream `sierrapy fasta … -o json` call in `pipeline.py`; FR-07 reporting.
+
+---
+
 ## 2026-06-07 (d080b37)
 
 Action: Edit

@@ -63,3 +63,8 @@ class SampleRepository(BaseRepository):
         """Create a HAS_ASSEMBLY relationship from Sample to an existing Assembly node."""
         with self._driver.session() as session:
             session.execute_write(txs._link_sample_assembly, sample_id, assembly_id)
+
+    def link_specimen(self, sample_id: str, specimen_id: str) -> None:
+        """Create a DERIVED_FROM relationship from Sample to an existing Specimen node."""
+        with self._driver.session() as session:
+            session.execute_write(txs._link_sample_specimen, sample_id, specimen_id)
