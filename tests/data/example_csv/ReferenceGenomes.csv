@@ -1,0 +1,3 @@
+accession_no,taxid,name,molecular_type,strain,annotation_source,source_database
+NZ_CP023401.1,562,Escherichia coli strain reference chromosome,DNA,ATCC reference,RefSeq,NCBI
+K03455.1,11676,HIV-1 isolate HXB2,RNA,HXB2,GenBank,NCBI

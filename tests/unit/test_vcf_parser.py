@@ -3,7 +3,7 @@ import os
 import pytest
 from nosograph.utils.vcf import _parse_ann, parse_medaka_vcf, parse_snippy_vcf
 
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "../../.claude/sample_files")
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 HIV_VCF = os.path.join(SAMPLE_DIR, "hiv.sample_1_medaka.annotated.vcf")
 SNIPPY_VCF = os.path.join(SAMPLE_DIR, "bacterial_samples.snps.vcf")
 
