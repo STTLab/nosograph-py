@@ -1,6 +1,9 @@
 import json
+import os
 import pytest
 from nosograph.utils.sierra import parse_sierra_records, parse_sierra_json, _unwrap
+
+EXAMPLE_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "sierrapy_result.example.json")
 
 
 # A trimmed but structurally faithful sierrapy/Stanford HIVdb response.
@@ -91,3 +94,10 @@ class TestParseJson:
         recs = parse_sierra_json(str(p), "SAMPLE1")
         assert len(recs) == 2
         assert recs[0]["sample_id"] == "SAMPLE1"
+
+    def test_parses_bundled_example_fixture(self):
+        # The fixture referenced by the README must parse cleanly.
+        recs = parse_sierra_json(EXAMPLE_JSON, "EX_SAMPLE")
+        assert {"ABC", "3TC", "EFV"} <= {r["drug_name"] for r in recs}
+        assert "M184V" in {m["text"] for r in recs for m in r["mutations"]}
+        assert all(r["sample_id"] == "EX_SAMPLE" for r in recs)
