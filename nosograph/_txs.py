@@ -158,6 +158,10 @@ def _link_sample_assembly(tx: ManagedTransaction, sample_id: str, assembly_id: s
     tx.run(CYPHERS["ASSOCIATE_Sample_HAS_Assembly"], sample_id=sample_id, assembly_id=assembly_id)
 
 
+def _link_sample_specimen(tx: ManagedTransaction, sample_id: str, specimen_id: str) -> None:
+    tx.run(CYPHERS["ASSOCIATE_Sample_DERIVED_FROM_Specimen"], sample_id=sample_id, specimen_id=specimen_id)
+
+
 # ---------------------------------------------------------------------------
 # Organism
 # ---------------------------------------------------------------------------
@@ -592,3 +596,136 @@ def _get_variants_by_sample(tx: ManagedTransaction, sample_id: str) -> list[tupl
 def _get_variants_by_ref(tx: ManagedTransaction, REF_ACC: str) -> list[dict]:
     records = tx.run(CYPHERS["MATCH_Variants_by_ref"], REF_ACC=REF_ACC)
     return [dict(r["v"]) for r in records]
+
+
+# ---------------------------------------------------------------------------
+# Analytics (cross-domain multi-hop traversals)
+# ---------------------------------------------------------------------------
+
+def _get_patient_variants(tx: ManagedTransaction, patient_id: str) -> list[dict]:
+    records = tx.run(CYPHERS["MATCH_patient_variants"], patient_id=patient_id)
+    return [
+        {
+            "specimen_id": r["specimen_id"],
+            "sample_id": r["sample_id"],
+            "variant": dict(r["variant"]),
+            "call": dict(r["call"]),
+        }
+        for r in records
+    ]
+
+
+def _get_ward_variant_clusters(tx: ManagedTransaction, min_patients: int) -> list[dict]:
+    records = tx.run(CYPHERS["MATCH_ward_variant_clusters"], min_patients=min_patients)
+    return [
+        {
+            "ward_id": r["ward_id"],
+            "ward_name": r["ward_name"],
+            "variant": dict(r["variant"]),
+            "patient_ids": list(r["patient_ids"]),
+            "patient_count": r["patient_count"],
+        }
+        for r in records
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Drug resistance (Stanford HIVdb)
+# ---------------------------------------------------------------------------
+
+def _create_drug_class(tx: ManagedTransaction, name: str, full_name: str | None = None) -> str:
+    tx.run(CYPHERS["CREATE_DrugClass"], name=name, full_name=full_name)
+    return name
+
+
+def _get_drug_class(tx: ManagedTransaction, name: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_DrugClass"], name=name).single()
+    return dict(record["dc"]) if record else None
+
+
+def _create_drug(
+    tx: ManagedTransaction,
+    name: str,
+    full_name: str | None = None,
+    display_abbr: str | None = None,
+) -> str:
+    tx.run(CYPHERS["CREATE_Drug"], name=name, full_name=full_name, display_abbr=display_abbr)
+    return name
+
+
+def _get_drug(tx: ManagedTransaction, name: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_Drug"], name=name).single()
+    return dict(record["d"]) if record else None
+
+
+def _create_mutation(
+    tx: ManagedTransaction, gene: str, text: str, primary_type: str | None = None
+) -> dict:
+    record = tx.run(CYPHERS["CREATE_Mutation"], gene=gene, text=text, primary_type=primary_type).single()
+    return dict(record["m"])
+
+
+def _get_mutation(tx: ManagedTransaction, gene: str, text: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_Mutation"], gene=gene, text=text).single()
+    return dict(record["m"]) if record else None
+
+
+def _delete_mutation(tx: ManagedTransaction, gene: str, text: str) -> None:
+    tx.run(CYPHERS["DELETE_Mutation"], gene=gene, text=text)
+
+
+def _create_hivdr_prediction(
+    tx: ManagedTransaction,
+    prediction_id: str,
+    sample_id: str | None = None,
+    gene: str | None = None,
+    drug_name: str | None = None,
+    score: float | None = None,
+    level: str | None = None,
+) -> str:
+    tx.run(
+        CYPHERS["CREATE_StanfordHIVDRPrediction"],
+        prediction_id=prediction_id,
+        sample_id=sample_id,
+        gene=gene,
+        drug_name=drug_name,
+        score=score,
+        level=level,
+    )
+    return prediction_id
+
+
+def _get_hivdr_prediction(tx: ManagedTransaction, prediction_id: str) -> dict | None:
+    record = tx.run(CYPHERS["MATCH_StanfordHIVDRPrediction"], prediction_id=prediction_id).single()
+    return dict(record["pred"]) if record else None
+
+
+def _delete_hivdr_prediction(tx: ManagedTransaction, prediction_id: str) -> None:
+    tx.run(CYPHERS["DELETE_StanfordHIVDRPrediction"], prediction_id=prediction_id)
+
+
+def _bulk_merge_hivdr(
+    tx: ManagedTransaction, sample_id: str, records: list[dict]
+) -> NodeAndRelationshipCreationStats:
+    summary = tx.run(CYPHERS["BULK_MERGE_HIVDR"], sample_id=sample_id, records=records).consume()
+    return {
+        "nodes_created": summary.counters.nodes_created,
+        "relationships_created": summary.counters.relationships_created,
+    }
+
+
+def _get_resistance_by_sample(tx: ManagedTransaction, sample_id: str) -> list[dict]:
+    records = tx.run(CYPHERS["MATCH_resistance_by_sample"], sample_id=sample_id)
+    return [
+        {
+            "prediction": dict(r["prediction"]),
+            "drug_name": r["drug_name"],
+            "drug_class": r["drug_class"],
+        }
+        for r in records
+    ]
+
+
+def _get_mutations_for_drug(tx: ManagedTransaction, drug_name: str) -> list[dict]:
+    records = tx.run(CYPHERS["MATCH_mutations_for_drug"], drug_name=drug_name)
+    return [{"mutation": dict(r["mutation"]), "score": r["score"]} for r in records]
