@@ -36,18 +36,23 @@ with NosoGraph("bolt://localhost:7687", auth=auth) as graph:
 
 ### Genomic & drug-resistance import
 
+The repo ships small example fixtures under [`tests/data/`](tests/data) that you
+can import against the `HIV_S001` sample created above:
+
 ```python
-# Variants from a SnpEff-annotated Medaka/Snippy VCF (plain .vcf or gzipped .vcf.gz),
-# imported once per reference accession:
+# Variants from a SnpEff-annotated Medaka VCF (plain .vcf or gzipped .vcf.gz),
+# imported per reference accession:
 graph.variants.bulk_import_from_vcf(
-    "03D1/05_medaka_variant/HXB2/medaka.annotated.vcf.gz",
+    "tests/data/hiv64148_HXB2_subset.medaka.annotated.vcf.gz",
     sample_id="HIV_S001", ref_accession="K03455.1", source="medaka",
 )
 
 # Stanford HIVdb / sierrapy drug-resistance predictions:
-graph.resistance.bulk_import_from_sierra("03D1/sierrapy_result.0.json", sample_id="HIV_S001")
+graph.resistance.bulk_import_from_sierra(
+    "tests/data/sierrapy_result.example.json", sample_id="HIV_S001",
+)
 
-# Cross-domain analytical queries
+# Cross-domain analytical queries (Patient <- Specimen <- Sample -> Variant)
 for pv in graph.analytics.patient_variants("P001"):
     print(pv.sample_id, pv.variant.gene_name, pv.variant.hgvs_p)
 
