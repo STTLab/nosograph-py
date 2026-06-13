@@ -25,7 +25,11 @@ class TestPatient:
         with pytest.raises(ValidationError, match="date_of_birth or age"):
             Patient(patient_id="P003", firstname="X", lastname="Y")
 
-    def test_sex_must_be_m_or_f(self):
+    def test_sex_accepts_m_f_other(self):
+        for s in ("M", "F", "Other"):
+            assert Patient(patient_id="P004", firstname="X", lastname="Y", age=25, sex=s).sex == s
+
+    def test_sex_rejects_unknown_value(self):
         with pytest.raises(ValidationError):
             Patient(patient_id="P004", firstname="X", lastname="Y", age=25, sex="Z")
 

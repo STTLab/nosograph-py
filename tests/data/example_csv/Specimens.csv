@@ -1,0 +1,6 @@
+specimen_id,patient_id,visit_id,specimen_type
+SP001,P005,V001,plasma
+SP002,P005,V002,plasma
+SP003,P002,V003,blood
+SP004,P003,V004,sputum
+SP005,P001,,blood

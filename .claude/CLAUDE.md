@@ -48,20 +48,23 @@ nosograph-py/
 │       ├── vcf.py           ← parse_medaka_vcf / parse_snippy_vcf (SnpEff-annotated VCF parsers)
 │       └── sierra.py        ← parse_sierra_json (Stanford HIVdb / sierrapy report parser)
 └── tests/
-    ├── unit/
-    │   ├── test_models.py       ← models only, no DB required
-    │   ├── test_types.py        ← Neo4JAuth, TypedDicts
-    │   ├── test_db.py           ← NosoGraph, mocked driver
-    │   ├── test_vcf_parser.py   ← Medaka/Snippy VCF parsing
+    ├── conftest.py              ← shared testcontainers Neo4j fixtures (graph/container; NOT autouse, so unit tests need no Docker)
+    ├── data/                    ← committed test fixtures: example_csv/*.csv, sample + gzipped VCFs
+    ├── unit/                    ← no DB required
+    │   ├── test_models.py       ← Pydantic models
+    │   ├── test_vcf_parser.py   ← Medaka/Snippy VCF parsing (plain + .gz)
     │   ├── test_sierra_parser.py ← Stanford HIVdb / sierrapy parsing
-    │   ├── test_analytics.py    ← AnalyticsRepository helpers/validation (mocked driver)
-    │   ├── test_pipeline.py     ← NosoGraphPipelineOutput file/dir checks (Canu + Flye)
-    │   └── test_cli.py          ← CLI sample methods (mocked connection)
-    │   (119 unit tests total)
-    └── integration/
-        ├── conftest.py           ← testcontainers Neo4j fixture (skips if Docker unavailable)
-        └── test_repositories.py  ← 52 tests, requires Docker (incl. VariantRepository, AnalyticsRepository, DrugResistanceRepository, gzipped-VCF functional import)
+    │   └── test_analytics.py    ← AnalyticsRepository helpers/validation (mocked driver)
+    ├── integration/
+    │   ├── conftest.py          ← autouse clean_db (wipes graph between tests)
+    │   └── test_repositories.py ← 52 tests, requires Docker (Variant/Analytics/DrugResistance repos, gzipped-VCF functional import)
+    └── e2e/
+        ├── conftest.py          ← autouse clean_db
+        └── test_example_import_e2e.py ← 19 tests, requires Docker: random records from tests/data/example_csv + gz VCF → repositories/bulk import → graph, incl. cross-domain clinical→genomic→analytics chains
 ```
+Test data lives in `tests/data/` (not `.claude/sample_files/`, which only holds the
+gitignored `sample_pipeline_output/` reference tree). Run with `pytest tests/unit`
+(no Docker), `pytest tests/integration` / `pytest tests/e2e` (Docker via testcontainers).
 
 ---
 
@@ -136,6 +139,7 @@ All 8 bugs from the initial audit (2026-06-07) are resolved.
 ```bash
 pytest tests/unit/          # no database required
 pytest tests/integration/   # requires Docker (testcontainers)
+pytest tests/e2e/           # requires Docker — example CSV/VCF → graph, end to end
 ```
 
 ---

@@ -39,7 +39,7 @@ SIERRA_REPORT = [
     }
 ]
 
-SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "../../.claude/sample_files")
+SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 HIV_VCF = os.path.join(SAMPLE_DIR, "hiv.sample_1_medaka.annotated.vcf")
 SNIPPY_VCF = os.path.join(SAMPLE_DIR, "bacterial_samples.snps.vcf")
 # Gzipped per-reference subsets cut from real HIV-64148 pipeline output.
