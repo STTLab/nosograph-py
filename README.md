@@ -180,6 +180,8 @@ for cluster in graph.analytics.ward_variant_clusters(min_patients=2):
 
 Repositories expose `.create()`, `.get()`, and (where applicable) `.delete()` plus `link_*` methods for relationships. Models are Pydantic v2.
 
+📖 **Full method-level reference: [docs/API.md](docs/API.md)** — every repository method, model field, type, parser, and the relationship/graph schema.
+
 ## Testing
 
 ```bash
