@@ -1,4 +1,12 @@
 from __future__ import annotations
+import gzip
+
+
+def _open_vcf(vcf_path: str):
+    """Open a VCF for text reading, transparently handling gzip (.gz)."""
+    if vcf_path.endswith(".gz"):
+        return gzip.open(vcf_path, "rt", encoding="utf-8")
+    return open(vcf_path, encoding="utf-8")
 
 
 def _to_int(val: str | None) -> int | None:
@@ -57,7 +65,7 @@ def parse_medaka_vcf(vcf_path: str, ref_accession: str, sample_id: str) -> list[
     FORMAT is expected to contain at least GT and GQ.
     """
     records: list[dict] = []
-    with open(vcf_path, encoding="utf-8") as fh:
+    with _open_vcf(vcf_path) as fh:
         for line in fh:
             if line.startswith("##"):
                 continue
@@ -117,7 +125,7 @@ def parse_snippy_vcf(vcf_path: str, ref_accession: str, sample_id: str) -> list[
     FORMAT is expected to contain GT, DP, RO, QR, AO, QA, GL.
     """
     records: list[dict] = []
-    with open(vcf_path, encoding="utf-8") as fh:
+    with _open_vcf(vcf_path) as fh:
         for line in fh:
             if line.startswith("##"):
                 continue

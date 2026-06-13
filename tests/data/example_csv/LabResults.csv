@@ -1,0 +1,5 @@
+lab_id,specimen_id,result_type,test_date,value,unit,notes
+LR001,SP003,blood_culture,2025-02-21,Escherichia coli,,Significant growth
+LR002,SP003,ast_amoxicillin,2025-02-22,R,,Resistant (see Antibiotic.csv A001)
+LR003,SP004,sputum_culture,2025-03-03,Klebsiella pneumoniae,,Moderate growth
+LR004,SP001,hiv_rna,2025-01-13,45000,copies/mL,Detected

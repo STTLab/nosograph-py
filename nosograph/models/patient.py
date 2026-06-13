@@ -8,7 +8,7 @@ class Patient(BaseModel):
     patient_id: str
     firstname: str
     lastname: str
-    sex: Optional[Literal["M", "F"]] = None
+    sex: Optional[Literal["M", "F", "Other"]] = None
     date_of_birth: Optional[date] = None
     age: Optional[int] = None
 

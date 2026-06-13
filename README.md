@@ -13,53 +13,78 @@ Requires Python 3.12+ and a running Neo4j instance (see [docker-compose.yml](htt
 ## Quick start
 
 ```python
-from nosograph import NosoGraph, Neo4JAuth, Patient, Specimen, Assembly
+from nosograph import NosoGraph, Neo4JAuth, Patient, Specimen, Sample
 
 auth = Neo4JAuth.from_string("neo4j/yourpassword")
 
 with NosoGraph("bolt://localhost:7687", auth=auth) as graph:
-    # Create a patient
-    patient = Patient(patient_id="P001", name="Jane Doe", dob="1985-03-12", sex="F")
-    graph.patients.create(patient)
-
-    # Retrieve
+    # Create a patient (firstname/lastname; provide date_of_birth OR age)
+    graph.patients.create(Patient(
+        patient_id="P001", firstname="Jane", lastname="Doe",
+        sex="F", date_of_birth="1985-03-12",
+    ))
     found = graph.patients.get("P001")
 
-    # Create a specimen linked to the patient
-    specimen = Specimen(specimen_id="S001", type="sputum", collected_at="2026-06-01")
-    graph.specimens.create(specimen, patient_id="P001")
+    # Create a specimen and link it to the patient
+    graph.specimens.create(Specimen(specimen_id="SP001", specimen_type="plasma"))
+    graph.specimens.link_patient("SP001", "P001")
+
+    # A sequenced sample derived from the specimen
+    graph.samples.create(Sample(sample_id="HIV_S001"))
+    graph.samples.link_specimen("HIV_S001", "SP001")
+```
+
+### Genomic & drug-resistance import
+
+```python
+# Variants from a SnpEff-annotated Medaka/Snippy VCF (plain .vcf or gzipped .vcf.gz),
+# imported once per reference accession:
+graph.variants.bulk_import_from_vcf(
+    "03D1/05_medaka_variant/HXB2/medaka.annotated.vcf.gz",
+    sample_id="HIV_S001", ref_accession="K03455.1", source="medaka",
+)
+
+# Stanford HIVdb / sierrapy drug-resistance predictions:
+graph.resistance.bulk_import_from_sierra("03D1/sierrapy_result.0.json", sample_id="HIV_S001")
+
+# Cross-domain analytical queries
+for pv in graph.analytics.patient_variants("P001"):
+    print(pv.sample_id, pv.variant.gene_name, pv.variant.hgvs_p)
+
+clusters = graph.analytics.ward_variant_clusters(min_patients=2)  # outbreak signal
 ```
 
 ## Entities and repositories
 
 | Entity | Repository | Notes |
 |---|---|---|
-| `Patient` | `graph.patients` | |
-| `Admission` | `graph.admissions` | linked to Patient + Ward |
-| `Ward` | `graph.wards` | linked to Department |
+| `Patient` | `graph.patients` | `HAS_ADMISSION`, `HAS_OPD_VISIT` |
+| `Admission` | `graph.admissions` | `ADMITTED_TO` Ward |
+| `OpdVisit` | `graph.opd_visits` | outpatient encounter |
+| `Ward` | `graph.wards` | `IN_DEPARTMENT` |
 | `Department` | `graph.departments` | |
-| `Specimen` | `graph.specimens` | linked to Patient |
-| `Sample` | `graph.samples` | linked to Specimen |
-| `Assembly` | `graph.assemblies` | linked to Sample; cascade-deletes Contigs |
-| `Organism` | `graph.organisms` | |
+| `Specimen` | `graph.specimens` | `COLLECTED_FROM` Patient, `COLLECTED_AT_VISIT`, `TESTED_FOR` LabResult |
+| `Sample` | `graph.samples` | `DERIVED_FROM` Specimen, `HAS_ASSEMBLY` |
+| `Assembly` | `graph.assemblies` | `HAS_CONTIG`; cascade-deletes Contigs |
+| `Organism` | `graph.organisms` | `REFERENCE_GENOME_OF` |
 | `ReferenceGenome` | `graph.reference_genomes` | linked to Organism |
-| `Variant` | — | Cypher + model exist; repository not yet implemented |
+| `LabResult` | `graph.lab_results` | |
+| `HIVViralLoad` | `graph.hiv_viral_loads` | |
+| `Variant` | `graph.variants` | gene-annotation-level nodes; dual-VCF bulk import (plain/`.gz`) |
+| `DrugClass`, `Drug`, `Mutation`, `StanfordHIVDRPrediction` | `graph.resistance` | sierrapy (Stanford HIVdb) bulk import |
+| cross-domain reads | `graph.analytics` | `patient_variants()`, `ward_variant_clusters()` |
 
-All repositories expose `.create()`, `.get()`, and `.delete()` where applicable. Models are Pydantic v2.
+Repositories expose `.create()`, `.get()`, and (where applicable) `.delete()` plus `link_*` methods for relationships. Models are Pydantic v2.
 
 ## Testing
 
-Unit tests require no database:
-
 ```bash
-pytest tests/unit/
+pytest tests/unit/          # no database required
+pytest tests/integration/   # requires Docker (testcontainers)
+pytest tests/e2e/           # requires Docker — example CSV/VCF → graph, end to end
 ```
 
-Integration tests use [testcontainers](https://testcontainers.com/) and require Docker:
-
-```bash
-pytest tests/integration/
-```
+Test fixtures (example CSVs, sample/gzipped VCFs) live in `tests/data/`.
 
 ## Part of NosoGraph
 

@@ -92,3 +92,34 @@ REQUIRE variant.ALT IS NOT NULL;
 CREATE CONSTRAINT variant_identity_key IF NOT EXISTS
 FOR (v:Variant)
 REQUIRE (v.REF_ACC, v.POS, v.REF, v.ALT, v.hgvs_c, v.hgvs_p) IS NODE KEY;
+
+// Drug resistance (Stanford HIVdb)
+
+// DrugClass
+CREATE CONSTRAINT drug_class_must_have_name IF NOT EXISTS
+FOR (dc:DrugClass) REQUIRE dc.name IS NOT NULL;
+CREATE CONSTRAINT drug_class_name_must_be_unique IF NOT EXISTS
+FOR (dc:DrugClass) REQUIRE dc.name IS UNIQUE;
+
+// Drug
+CREATE CONSTRAINT drug_must_have_name IF NOT EXISTS
+FOR (d:Drug) REQUIRE d.name IS NOT NULL;
+CREATE CONSTRAINT drug_name_must_be_unique IF NOT EXISTS
+FOR (d:Drug) REQUIRE d.name IS UNIQUE;
+
+// StanfordHIVDRPrediction
+CREATE CONSTRAINT hivdr_prediction_must_have_id IF NOT EXISTS
+FOR (pred:StanfordHIVDRPrediction) REQUIRE pred.prediction_id IS NOT NULL;
+CREATE CONSTRAINT hivdr_prediction_id_must_be_unique IF NOT EXISTS
+FOR (pred:StanfordHIVDRPrediction) REQUIRE pred.prediction_id IS UNIQUE;
+
+// Mutation
+// Identity: (gene, text) — e.g. (RT, M184V)
+CREATE CONSTRAINT mutation_gene_must_exist IF NOT EXISTS
+FOR (m:Mutation) REQUIRE m.gene IS NOT NULL;
+CREATE CONSTRAINT mutation_text_must_exist IF NOT EXISTS
+FOR (m:Mutation) REQUIRE m.text IS NOT NULL;
+// NODE KEY (Enterprise) prevents duplicate Mutation nodes under concurrent MERGE.
+CREATE CONSTRAINT mutation_identity_key IF NOT EXISTS
+FOR (m:Mutation)
+REQUIRE (m.gene, m.text) IS NODE KEY;
